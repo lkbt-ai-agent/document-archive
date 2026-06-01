@@ -1,6 +1,6 @@
 "use client";
 
-import type { ElementType } from "react";
+import { useState, type CSSProperties, type ElementType } from "react";
 import {
   Archive,
   Bot,
@@ -17,12 +17,15 @@ import {
   Info,
   ListFilter,
   MoreHorizontal,
+  PanelLeft,
+  PanelRight,
   Plus,
   Search,
   ShieldCheck,
   Sparkles,
   Tag,
   Upload,
+  X,
 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -59,7 +62,7 @@ import {
   SidebarMenuSub,
   SidebarProvider,
   SidebarRail,
-  SidebarTrigger,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
@@ -215,259 +218,349 @@ const fileTone = {
 
 export function ArchiveShell() {
   const selected = files[0];
-  const SelectedIcon = fileIcon[selected.type];
 
   return (
     <SidebarProvider defaultOpen>
       <ArchiveSidebar />
-      <SidebarInset className="min-w-0 bg-[#f7f8fb]">
-        <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
-          <div className="flex min-h-16 flex-col gap-3 px-4 py-3 md:h-12 md:min-h-0 md:flex-row md:items-center md:px-4 md:py-0">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <SidebarTrigger aria-label="Toggle folder sidebar" />
-              </div>
-            </div>
+      <ArchiveWorkspace selected={selected} />
+    </SidebarProvider>
+  );
+}
 
-            <div className="relative md:ml-auto md:w-[min(42vw,520px)]">
-              <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                aria-label="Search documents"
-                placeholder="Search files, tags, dates"
-                className="h-10 bg-muted/40 pl-9 shadow-none"
-              />
-            </div>
+function ArchiveWorkspace({ selected }: { selected: FileItem }) {
+  const folderSidebar = useSidebar();
+  const [metadataOpen, setMetadataOpen] = useState(true);
 
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1 md:flex-none"
-              >
-                <Upload className="size-4" />
-                Upload
-              </Button>
-              <Button size="sm" className="flex-1 md:flex-none">
-                <Plus className="size-4" />
-                New folder
-              </Button>
-            </div>
-          </div>
-        </header>
-
-        <div className="grid min-h-[calc(100vh-65px)] grid-cols-1 bg-background md:min-h-[calc(100vh-49px)] lg:grid-cols-[minmax(0,1fr)_320px]">
-          <section className="min-w-0">
-            <ScrollArea className="lg:h-[calc(100vh-49px)]">
-              <div className="space-y-6 p-4 md:p-6">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                      My Drive
-                      <ChevronRight className="size-3.5" />
-                      Personal
-                    </div>
-                    <h2 className="mt-1 text-2xl font-semibold tracking-normal">
-                      Personal documents
-                    </h2>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm">
-                      <ListFilter className="size-4" />
-                      Filter
-                    </Button>
-                    <Button variant="outline" size="icon-sm">
-                      <Grid2X2 className="size-4" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-3">
-                  {folderTiles.map((folder) => (
-                    <button
-                      key={folder.name}
-                      className="rounded-md border bg-card p-3 text-left transition-colors hover:bg-muted/50"
+  return (
+    <SidebarInset className="min-w-0 bg-[#f7f8fb]">
+      <SidebarProvider
+        open={metadataOpen}
+        onOpenChange={setMetadataOpen}
+        defaultOpen
+        className="min-h-0 flex-1 bg-background"
+        style={
+          {
+            "--sidebar-width": "20rem",
+          } as CSSProperties
+        }
+      >
+          <div className="flex min-w-0 flex-1 flex-col">
+            <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
+              <div className="flex min-h-16 flex-col gap-3 px-4 py-3 md:h-12 md:min-h-0 md:flex-row md:items-center md:px-4 md:py-0">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Toggle folder sidebar"
+                      onClick={folderSidebar.toggleSidebar}
                     >
-                      <div className="flex items-center gap-2">
-                        <Folder className="size-4 text-amber-600" />
-                        <span className="min-w-0 truncate text-sm font-medium">
-                          {folder.name}
-                        </span>
-                      </div>
-                      <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                        <span>{folder.count}</span>
-                        <span className="truncate">{folder.updated}</span>
-                      </div>
-                    </button>
-                  ))}
+                      <PanelLeft className="size-4" />
+                    </Button>
+                  </div>
+                  <MetadataSidebarTrigger className="md:hidden" />
                 </div>
 
-                <div className="overflow-hidden rounded-md border bg-card">
-                  <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-3 border-b px-3 py-2 text-xs font-medium uppercase text-muted-foreground md:grid-cols-[minmax(0,1.6fr)_120px_110px_112px]">
-                    <span>Name</span>
-                    <span className="hidden md:block">Modified</span>
-                    <span className="hidden md:block">Size</span>
-                    <span>Status</span>
-                  </div>
+                <div className="relative md:ml-auto md:w-[min(42vw,520px)]">
+                  <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    aria-label="Search documents"
+                    placeholder="Search files, tags, dates"
+                    className="h-10 bg-muted/40 pl-9 shadow-none"
+                  />
+                </div>
 
-                  <div className="divide-y">
-                    {files.map((file, index) => {
-                      const Icon = fileIcon[file.type];
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 md:flex-none"
+                  >
+                    <Upload className="size-4" />
+                    Upload
+                  </Button>
+                  <Button size="sm" className="flex-1 md:flex-none">
+                    <Plus className="size-4" />
+                    New folder
+                  </Button>
+                  <MetadataSidebarTrigger className="hidden md:inline-flex" />
+                </div>
+              </div>
+            </header>
 
-                      return (
+            <div className="min-h-[calc(100vh-65px)] bg-background md:min-h-[calc(100vh-49px)]">
+              <section className="min-w-0">
+                <ScrollArea className="lg:h-[calc(100vh-49px)]">
+                  <div className="space-y-6 p-4 md:p-6">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                          My Drive
+                          <ChevronRight className="size-3.5" />
+                          Personal
+                        </div>
+                        <h2 className="mt-1 text-2xl font-semibold tracking-normal">
+                          Personal documents
+                        </h2>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm">
+                          <ListFilter className="size-4" />
+                          Filter
+                        </Button>
+                        <Button variant="outline" size="icon-sm">
+                          <Grid2X2 className="size-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      {folderTiles.map((folder) => (
                         <button
-                          key={file.name}
-                          className={cn(
-                            "grid w-full grid-cols-[minmax(0,1fr)_96px] items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/50 md:grid-cols-[minmax(0,1.6fr)_120px_110px_112px]",
-                            index === 0 && "bg-primary/10",
-                          )}
+                          key={folder.name}
+                          className="rounded-md border bg-card p-3 text-left transition-colors hover:bg-muted/50"
                         >
-                          <span className="flex min-w-0 items-center gap-3">
-                            <span
+                          <div className="flex items-center gap-2">
+                            <Folder className="size-4 text-amber-600" />
+                            <span className="min-w-0 truncate text-sm font-medium">
+                              {folder.name}
+                            </span>
+                          </div>
+                          <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                            <span>{folder.count}</span>
+                            <span className="truncate">{folder.updated}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="overflow-hidden rounded-md border bg-card">
+                      <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-3 border-b px-3 py-2 text-xs font-medium uppercase text-muted-foreground md:grid-cols-[minmax(0,1.6fr)_120px_110px_112px]">
+                        <span>Name</span>
+                        <span className="hidden md:block">Modified</span>
+                        <span className="hidden md:block">Size</span>
+                        <span>Status</span>
+                      </div>
+
+                      <div className="divide-y">
+                        {files.map((file, index) => {
+                          const Icon = fileIcon[file.type];
+
+                          return (
+                            <button
+                              key={file.name}
                               className={cn(
-                                "flex size-9 shrink-0 items-center justify-center rounded-md ring-1",
-                                fileTone[file.type],
+                                "grid w-full grid-cols-[minmax(0,1fr)_96px] items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/50 md:grid-cols-[minmax(0,1.6fr)_120px_110px_112px]",
+                                index === 0 && "bg-primary/10",
                               )}
                             >
-                              <Icon className="size-4" />
-                            </span>
-                            <span className="min-w-0">
-                              <span className="block truncate text-sm font-medium">
-                                {file.name}
+                              <span className="flex min-w-0 items-center gap-3">
+                                <span
+                                  className={cn(
+                                    "flex size-9 shrink-0 items-center justify-center rounded-md ring-1",
+                                    fileTone[file.type],
+                                  )}
+                                >
+                                  <Icon className="size-4" />
+                                </span>
+                                <span className="min-w-0">
+                                  <span className="block truncate text-sm font-medium">
+                                    {file.name}
+                                  </span>
+                                  <span className="block truncate text-xs text-muted-foreground md:hidden">
+                                    {file.modified} · {file.size}
+                                  </span>
+                                  <span className="hidden truncate text-xs text-muted-foreground md:block">
+                                    {file.folder}
+                                  </span>
+                                </span>
                               </span>
-                              <span className="block truncate text-xs text-muted-foreground md:hidden">
-                                {file.modified} · {file.size}
+                              <span className="hidden text-sm text-muted-foreground md:block">
+                                {file.modified}
                               </span>
-                              <span className="hidden truncate text-xs text-muted-foreground md:block">
-                                {file.folder}
+                              <span className="hidden text-sm text-muted-foreground md:block">
+                                {file.size}
                               </span>
-                            </span>
-                          </span>
-                          <span className="hidden text-sm text-muted-foreground md:block">
-                            {file.modified}
-                          </span>
-                          <span className="hidden text-sm text-muted-foreground md:block">
-                            {file.size}
-                          </span>
-                          <span>
-                            <Badge
-                              variant={
-                                file.status === "Needs review"
-                                  ? "destructive"
-                                  : "outline"
-                              }
-                              className="max-w-full"
-                            >
-                              {file.status}
-                            </Badge>
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </ScrollArea>
-          </section>
-
-          <aside className="border-t bg-background lg:border-l lg:border-t-0">
-            <ScrollArea className="lg:h-[calc(100vh-49px)]">
-              <div className="space-y-6 p-4 md:p-6">
-                <div className="space-y-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <div
-                        className={cn(
-                          "flex size-11 shrink-0 items-center justify-center rounded-md ring-1",
-                          fileTone[selected.type],
-                        )}
-                      >
-                        <SelectedIcon className="size-5" />
-                      </div>
-                      <div className="min-w-0">
-                        <h2 className="truncate text-sm font-semibold">
-                          {selected.name}
-                        </h2>
-                        <p className="text-xs uppercase text-muted-foreground">
-                          {selected.type} file
-                        </p>
+                              <span>
+                                <Badge
+                                  variant={
+                                    file.status === "Needs review"
+                                      ? "destructive"
+                                      : "outline"
+                                  }
+                                  className="max-w-full"
+                                >
+                                  {file.status}
+                                </Badge>
+                              </span>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
-                    <Button variant="ghost" size="icon-sm">
-                      <MoreHorizontal className="size-4" />
-                    </Button>
                   </div>
+                </ScrollArea>
+              </section>
+            </div>
+          </div>
+          <MetadataSidebar selected={selected} />
+        </SidebarProvider>
+      </SidebarInset>
+  );
+}
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button variant="outline" size="sm">
-                      <Info className="size-4" />
-                      Details
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      <ShieldCheck className="size-4" />
-                      Access
-                    </Button>
+function MetadataSidebarTrigger({ className }: { className?: string }) {
+  const { toggleSidebar } = useSidebar();
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="icon-sm"
+      className={className}
+      aria-label="Toggle metadata sidebar"
+      onClick={toggleSidebar}
+    >
+      <PanelRight className="size-4" />
+    </Button>
+  );
+}
+
+function MetadataSidebarClose() {
+  const { isMobile, setOpen, setOpenMobile } = useSidebar();
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      aria-label="Close metadata sidebar"
+      onClick={() => {
+        if (isMobile) {
+          setOpenMobile(false);
+          return;
+        }
+
+        setOpen(false);
+      }}
+    >
+      <X className="size-4" />
+    </Button>
+  );
+}
+
+function MetadataSidebar({ selected }: { selected: FileItem }) {
+  const SelectedIcon = fileIcon[selected.type];
+
+  return (
+    <Sidebar
+      side="right"
+      collapsible="offcanvas"
+      className="border-l bg-background text-foreground"
+    >
+      <SidebarHeader className="h-[49px] shrink-0 flex-row items-center justify-between border-b px-4">
+        <div className="text-sm font-semibold">File metadata</div>
+        <MetadataSidebarClose />
+      </SidebarHeader>
+
+      <SidebarContent className="gap-0 bg-background">
+        <ScrollArea className="h-[calc(100vh-49px)]">
+          <div className="space-y-6 p-6">
+            <div className="space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <div
+                    className={cn(
+                      "flex size-11 shrink-0 items-center justify-center rounded-md ring-1",
+                      fileTone[selected.type],
+                    )}
+                  >
+                    <SelectedIcon className="size-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="truncate text-sm font-semibold">
+                      {selected.name}
+                    </h2>
+                    <p className="text-xs uppercase text-muted-foreground">
+                      {selected.type} file
+                    </p>
                   </div>
                 </div>
-
-                <Separator />
-
-                <section className="space-y-3">
-                  <h3 className="text-xs font-semibold uppercase text-muted-foreground">
-                    Metadata
-                  </h3>
-                  <dl className="space-y-3 text-sm">
-                    <MetaRow icon={Folder} label="Folder" value="Identity" />
-                    <MetaRow
-                      icon={CalendarDays}
-                      label="Created"
-                      value="Jan 14, 2026"
-                    />
-                    <MetaRow icon={Clock3} label="Modified" value="Today" />
-                    <MetaRow icon={Tag} label="Tags" value="ID, renewal" />
-                  </dl>
-                </section>
-
-                <Separator />
-
-                <section className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Bot className="size-4 text-muted-foreground" />
-                    <h3 className="text-xs font-semibold uppercase text-muted-foreground">
-                      AI actions
-                    </h3>
-                  </div>
-
-                  <div className="space-y-2">
-                    {[
-                      "Summarize document",
-                      "Extract key dates",
-                      "Suggest tags",
-                      "Find related files",
-                    ].map((action) => (
-                      <Button
-                        key={action}
-                        variant="outline"
-                        size="sm"
-                        className="w-full justify-start"
-                      >
-                        <Sparkles className="size-4" />
-                        {action}
-                      </Button>
-                    ))}
-                  </div>
-
-                  <p className="rounded-md border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
-                    AI actions are placeholders for the next phase. No document
-                    content is sent anywhere in this UI skeleton.
-                  </p>
-                </section>
+                <Button variant="ghost" size="icon-sm">
+                  <MoreHorizontal className="size-4" />
+                </Button>
               </div>
-            </ScrollArea>
-          </aside>
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="outline" size="sm">
+                  <Info className="size-4" />
+                  Details
+                </Button>
+                <Button variant="outline" size="sm">
+                  <ShieldCheck className="size-4" />
+                  Access
+                </Button>
+              </div>
+            </div>
+
+            <Separator />
+
+            <section className="space-y-3">
+              <h3 className="text-xs font-semibold uppercase text-muted-foreground">
+                Metadata
+              </h3>
+              <dl className="space-y-3 text-sm">
+                <MetaRow icon={Folder} label="Folder" value="Identity" />
+                <MetaRow
+                  icon={CalendarDays}
+                  label="Created"
+                  value="Jan 14, 2026"
+                />
+                <MetaRow icon={Clock3} label="Modified" value="Today" />
+                <MetaRow icon={Tag} label="Tags" value="ID, renewal" />
+              </dl>
+            </section>
+
+            <Separator />
+
+            <section className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Bot className="size-4 text-muted-foreground" />
+                <h3 className="text-xs font-semibold uppercase text-muted-foreground">
+                  AI actions
+                </h3>
+              </div>
+
+              <div className="space-y-2">
+                {[
+                  "Summarize document",
+                  "Extract key dates",
+                  "Suggest tags",
+                  "Find related files",
+                ].map((action) => (
+                  <Button
+                    key={action}
+                    variant="outline"
+                    size="sm"
+                    className="w-full justify-start"
+                  >
+                    <Sparkles className="size-4" />
+                    {action}
+                  </Button>
+                ))}
+              </div>
+
+              <p className="rounded-md border bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
+                AI actions are placeholders for the next phase. No document
+                content is sent anywhere in this UI skeleton.
+              </p>
+            </section>
+          </div>
+        </ScrollArea>
+      </SidebarContent>
+    </Sidebar>
   );
 }
 
