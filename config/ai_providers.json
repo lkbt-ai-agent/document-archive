@@ -1,0 +1,45 @@
+{
+  "runtime": "llama.cpp",
+  "default_base_url_env": "LLAMA_CPP_BASE_URL",
+  "providers": {
+    "ocr": {
+      "kind": "openai_chat_vision",
+      "base_url_env": "LLAMA_CPP_OCR_BASE_URL",
+      "model_env": "LOCAL_AI_OCR_MODEL_NAME",
+      "model_path_env": "LOCAL_AI_OCR_MODEL_PATH",
+      "mmproj_path_env": "LOCAL_AI_OCR_MMPROJ_PATH",
+      "default_model": "Qwen2.5-VL-7B-Instruct",
+      "uses": [
+        "OCR",
+        "image analysis"
+      ],
+      "endpoint": "/v1/chat/completions"
+    },
+    "embedding": {
+      "kind": "openai_embedding",
+      "base_url_env": "LLAMA_CPP_EMBEDDING_BASE_URL",
+      "model_env": "LOCAL_AI_EMBEDDING_MODEL_NAME",
+      "model_path_env": "LOCAL_AI_EMBEDDING_MODEL_PATH",
+      "default_model": "BGE-M3",
+      "uses": [
+        "embeddings",
+        "semantic search"
+      ],
+      "endpoint": "/v1/embeddings"
+    },
+    "generation": {
+      "kind": "openai_chat",
+      "base_url_env": "LLAMA_CPP_GENERATION_BASE_URL",
+      "model_env": "LOCAL_AI_GENERATION_MODEL_NAME",
+      "model_path_env": "LOCAL_AI_GENERATION_MODEL_PATH",
+      "default_model": "Qwen3-14B",
+      "uses": [
+        "summarization",
+        "tagging",
+        "document generation",
+        "document merge"
+      ],
+      "endpoint": "/v1/chat/completions"
+    }
+  }
+}

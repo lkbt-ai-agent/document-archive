@@ -17,6 +17,7 @@ Use FastAPI over NestJS. The backend is Python-heavy: file parsing, OCR, embeddi
 - [Backend and API](docs/backend_api.md): folder structure, modules, endpoints.
 - [Data Model](docs/data_model.md): entities, fields, indexes.
 - [AI and RAG](docs/ai_rag.md): provider interfaces, local models, pipelines.
+- [Local AI Model Setup](docs/local_ai_models.md): llama.cpp runtime, model paths, env vars, health checks, and verification.
 - [Storage and Infrastructure](docs/storage_infra.md): PostgreSQL/pgvector, MinIO, Mac Mini limits, docs references.
 
 ## Config

@@ -2,6 +2,8 @@
 
 All model calls go through provider interfaces. llama.cpp is the first runtime, not a hard dependency of domain modules.
 
+Phase 2.5 local runtime setup, environment variables, provider config, and verification scripts are documented in [Local AI Model Setup](local_ai_models.md). Backend integration remains a Phase 3 task.
+
 ## Local Model Map
 
 | Use | Model |
