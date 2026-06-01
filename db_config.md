@@ -7,4 +7,4 @@ DATABASE_URL=postgresql+psycopg://mirimiriuser:mirimiri@49.247.14.186:5432/mirim
 MINIO_ENDPOINT=http://49.247.14.186:9000
 MINIO_ACCESS_KEY=lkbt1504
 MINIO_SECRET_KEY=lkbt1504!
-MINIO_BUCKET=image-archive-bot
+MINIO_BUCKET=document-archive

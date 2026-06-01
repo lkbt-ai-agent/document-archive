@@ -244,170 +244,167 @@ function ArchiveWorkspace({ selected }: { selected: FileItem }) {
           } as CSSProperties
         }
       >
-          <div className="flex min-w-0 flex-1 flex-col">
-            <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
-              <div className="flex min-h-16 flex-col gap-3 px-4 py-3 md:h-12 md:min-h-0 md:flex-row md:items-center md:px-4 md:py-0">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label="Toggle folder sidebar"
-                      onClick={folderSidebar.toggleSidebar}
-                    >
-                      <PanelLeft className="size-4" />
-                    </Button>
-                  </div>
-                  <MetadataSidebarTrigger className="md:hidden" />
-                </div>
-
-                <div className="relative md:ml-auto md:w-[min(42vw,520px)]">
-                  <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    aria-label="Search documents"
-                    placeholder="Search files, tags, dates"
-                    className="h-10 bg-muted/40 pl-9 shadow-none"
-                  />
-                </div>
-
-                <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
+            <div className="flex min-h-16 flex-col gap-3 px-4 py-3 md:h-12 md:min-h-0 md:flex-row md:items-center md:px-4 md:py-0">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
                   <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 md:flex-none"
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Toggle folder sidebar"
+                    onClick={folderSidebar.toggleSidebar}
                   >
-                    <Upload className="size-4" />
-                    Upload
+                    <PanelLeft className="size-4" />
                   </Button>
-                  <Button size="sm" className="flex-1 md:flex-none">
-                    <Plus className="size-4" />
-                    New folder
-                  </Button>
-                  <MetadataSidebarTrigger className="hidden md:inline-flex" />
                 </div>
+                <MetadataSidebarTrigger className="md:hidden" />
               </div>
-            </header>
 
-            <div className="min-h-[calc(100vh-65px)] bg-background md:min-h-[calc(100vh-49px)]">
-              <section className="min-w-0">
-                <ScrollArea className="lg:h-[calc(100vh-49px)]">
-                  <div className="space-y-6 p-4 md:p-6">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                          My Drive
-                          <ChevronRight className="size-3.5" />
-                          Personal
-                        </div>
-                        <h2 className="mt-1 text-2xl font-semibold tracking-normal">
-                          Personal documents
-                        </h2>
-                      </div>
+              <div className="relative md:ml-auto md:w-[min(42vw,520px)]">
+                <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  aria-label="Search documents"
+                  placeholder="Search files, tags, dates"
+                  className="h-10 bg-muted/40 pl-9 shadow-none"
+                />
+              </div>
 
-                      <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm">
-                          <ListFilter className="size-4" />
-                          Filter
-                        </Button>
-                        <Button variant="outline" size="icon-sm">
-                          <Grid2X2 className="size-4" />
-                        </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 md:flex-none"
+                >
+                  <Upload className="size-4" />
+                  Upload
+                </Button>
+                <Button size="sm" className="flex-1 md:flex-none">
+                  <Plus className="size-4" />
+                  New folder
+                </Button>
+                <MetadataSidebarTrigger className="hidden md:inline-flex" />
+              </div>
+            </div>
+          </header>
+
+          <div className="min-h-[calc(100vh-65px)] bg-background md:min-h-[calc(100vh-49px)]">
+            <section className="min-w-0">
+              <ScrollArea className="lg:h-[calc(100vh-49px)]">
+                <div className="space-y-6 p-4 md:p-6">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                        My Drive
+                        <ChevronRight className="size-3.5" />
+                        Personal
                       </div>
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      {folderTiles.map((folder) => (
-                        <button
-                          key={folder.name}
-                          className="rounded-md border bg-card p-3 text-left transition-colors hover:bg-muted/50"
-                        >
-                          <div className="flex items-center gap-2">
-                            <Folder className="size-4 text-amber-600" />
-                            <span className="min-w-0 truncate text-sm font-medium">
-                              {folder.name}
-                            </span>
-                          </div>
-                          <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                            <span>{folder.count}</span>
-                            <span className="truncate">{folder.updated}</span>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-
-                    <div className="overflow-hidden rounded-md border bg-card">
-                      <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-3 border-b px-3 py-2 text-xs font-medium uppercase text-muted-foreground md:grid-cols-[minmax(0,1.6fr)_120px_110px_112px]">
-                        <span>Name</span>
-                        <span className="hidden md:block">Modified</span>
-                        <span className="hidden md:block">Size</span>
-                        <span>Status</span>
-                      </div>
-
-                      <div className="divide-y">
-                        {files.map((file, index) => {
-                          const Icon = fileIcon[file.type];
-
-                          return (
-                            <button
-                              key={file.name}
-                              className={cn(
-                                "grid w-full grid-cols-[minmax(0,1fr)_96px] items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/50 md:grid-cols-[minmax(0,1.6fr)_120px_110px_112px]",
-                                index === 0 && "bg-primary/10",
-                              )}
-                            >
-                              <span className="flex min-w-0 items-center gap-3">
-                                <span
-                                  className={cn(
-                                    "flex size-9 shrink-0 items-center justify-center rounded-md ring-1",
-                                    fileTone[file.type],
-                                  )}
-                                >
-                                  <Icon className="size-4" />
-                                </span>
-                                <span className="min-w-0">
-                                  <span className="block truncate text-sm font-medium">
-                                    {file.name}
-                                  </span>
-                                  <span className="block truncate text-xs text-muted-foreground md:hidden">
-                                    {file.modified} · {file.size}
-                                  </span>
-                                  <span className="hidden truncate text-xs text-muted-foreground md:block">
-                                    {file.folder}
-                                  </span>
-                                </span>
-                              </span>
-                              <span className="hidden text-sm text-muted-foreground md:block">
-                                {file.modified}
-                              </span>
-                              <span className="hidden text-sm text-muted-foreground md:block">
-                                {file.size}
-                              </span>
-                              <span>
-                                <Badge
-                                  variant={
-                                    file.status === "Needs review"
-                                      ? "destructive"
-                                      : "outline"
-                                  }
-                                  className="max-w-full"
-                                >
-                                  {file.status}
-                                </Badge>
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm">
+                        <ListFilter className="size-4" />
+                        Filter
+                      </Button>
+                      <Button variant="outline" size="icon-sm">
+                        <Grid2X2 className="size-4" />
+                      </Button>
                     </div>
                   </div>
-                </ScrollArea>
-              </section>
-            </div>
+
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    {folderTiles.map((folder) => (
+                      <button
+                        key={folder.name}
+                        className="rounded-md border bg-card p-3 text-left transition-colors hover:bg-muted/50"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Folder className="size-4 text-amber-600" />
+                          <span className="min-w-0 truncate text-sm font-medium">
+                            {folder.name}
+                          </span>
+                        </div>
+                        <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                          <span>{folder.count}</span>
+                          <span className="truncate">{folder.updated}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="overflow-hidden rounded-md border bg-card">
+                    <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-3 border-b px-3 py-2 text-xs font-medium uppercase text-muted-foreground md:grid-cols-[minmax(0,1.6fr)_120px_110px_112px]">
+                      <span>Name</span>
+                      <span className="hidden md:block">Modified</span>
+                      <span className="hidden md:block">Size</span>
+                      <span>Status</span>
+                    </div>
+
+                    <div className="divide-y">
+                      {files.map((file, index) => {
+                        const Icon = fileIcon[file.type];
+
+                        return (
+                          <button
+                            key={file.name}
+                            className={cn(
+                              "grid w-full grid-cols-[minmax(0,1fr)_96px] items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/50 md:grid-cols-[minmax(0,1.6fr)_120px_110px_112px]",
+                              index === 0 && "bg-primary/10",
+                            )}
+                          >
+                            <span className="flex min-w-0 items-center gap-3">
+                              <span
+                                className={cn(
+                                  "flex size-9 shrink-0 items-center justify-center rounded-md ring-1",
+                                  fileTone[file.type],
+                                )}
+                              >
+                                <Icon className="size-4" />
+                              </span>
+                              <span className="min-w-0">
+                                <span className="block truncate text-sm font-medium">
+                                  {file.name}
+                                </span>
+                                <span className="block truncate text-xs text-muted-foreground md:hidden">
+                                  {file.modified} · {file.size}
+                                </span>
+                                <span className="hidden truncate text-xs text-muted-foreground md:block">
+                                  {file.folder}
+                                </span>
+                              </span>
+                            </span>
+                            <span className="hidden text-sm text-muted-foreground md:block">
+                              {file.modified}
+                            </span>
+                            <span className="hidden text-sm text-muted-foreground md:block">
+                              {file.size}
+                            </span>
+                            <span>
+                              <Badge
+                                variant={
+                                  file.status === "Needs review"
+                                    ? "destructive"
+                                    : "outline"
+                                }
+                                className="max-w-full"
+                              >
+                                {file.status}
+                              </Badge>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </ScrollArea>
+            </section>
           </div>
-          <MetadataSidebar selected={selected} />
-        </SidebarProvider>
-      </SidebarInset>
+        </div>
+        <MetadataSidebar selected={selected} />
+      </SidebarProvider>
+    </SidebarInset>
   );
 }
 
