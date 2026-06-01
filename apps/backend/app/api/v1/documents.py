@@ -4,12 +4,14 @@ import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.ai.providers import AIProviderRuntimeError
 from app.api.v1.schemas import DocumentChunkRead, DocumentRead
 from app.core.database import get_db
+from app.core.config import get_settings
 from app.db.models import Document, DocumentChunk
 from app.modules.documents.service import DocumentService
 from app.modules.extraction.service import SUPPORTED_EXTENSIONS
@@ -60,6 +62,21 @@ def get_document_content(document_id: uuid.UUID, db: Session = Depends(get_db)) 
     if not db.get(Document, document_id):
         raise HTTPException(status_code=404, detail="Document not found.")
     return list(db.scalars(select(DocumentChunk).where(DocumentChunk.document_id == document_id).order_by(DocumentChunk.chunk_index)))
+
+
+@router.get("/{document_id}/download")
+def download_document(document_id: uuid.UUID, db: Session = Depends(get_db)) -> FileResponse:
+    document = db.get(Document, document_id)
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    if document.storage_bucket:
+        raise HTTPException(status_code=501, detail="Direct MinIO download URLs are not implemented in this MVP.")
+    settings = get_settings()
+    object_key = Path(document.storage_object_key).name
+    path = settings.local_storage_dir / object_key
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Stored file not found.")
+    return FileResponse(path, media_type=document.mime_type, filename=document.original_filename)
 
 
 @router.post("/{document_id}/process", response_model=DocumentRead)
