@@ -458,7 +458,7 @@ function MetadataSidebar({ selected }: { selected: FileItem }) {
     <Sidebar
       side="right"
       collapsible="offcanvas"
-      className="border-l bg-background text-foreground"
+      className="z-30 border-l bg-background text-foreground"
     >
       <SidebarHeader className="h-[49px] shrink-0 flex-row items-center justify-between border-b px-4">
         <div className="text-sm font-semibold">File metadata</div>
@@ -567,7 +567,7 @@ function MetadataSidebar({ selected }: { selected: FileItem }) {
 function ArchiveSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r">
-      <SidebarHeader className="h-[49px] shrink-0 justify-center">
+      <SidebarHeader className="mt-1 h-[49px] shrink-0 justify-center">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
