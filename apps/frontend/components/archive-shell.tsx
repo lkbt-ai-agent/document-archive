@@ -11,6 +11,7 @@ import {
   FileImage,
   FileText,
   FileType,
+  FolderPen,
   Folder,
   FolderPlus,
   FolderOpen,
@@ -24,6 +25,7 @@ import {
   Search,
   Sparkles,
   Tag,
+  Trash2,
   Upload,
   X,
 } from "lucide-react";
@@ -32,6 +34,13 @@ import { api, type ArchiveDocument, type Folder as FolderType, type Lineage, typ
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -70,6 +79,18 @@ import {
 import { cn } from "@/lib/utils";
 
 type AIAction = "summarize" | "draft" | "report" | "rewrite-style" | "merge-documents";
+type FolderDialogState =
+  | { mode: "create"; parentId: string | null }
+  | { mode: "rename"; folder: FolderType }
+  | null;
+type DeleteDialogState =
+  | { type: "folder"; folder: FolderType }
+  | { type: "document"; document: ArchiveDocument }
+  | null;
+type ContextMenuState =
+  | { type: "folder"; folder: FolderType; x: number; y: number }
+  | { type: "document"; document: ArchiveDocument; x: number; y: number }
+  | null;
 
 const actionLabels: Record<AIAction, string> = {
   summarize: "Summarize",
@@ -102,6 +123,9 @@ export function ArchiveShell() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [aiAction, setAiAction] = useState<AIAction | null>(null);
+  const [folderDialog, setFolderDialog] = useState<FolderDialogState>(null);
+  const [deleteDialog, setDeleteDialog] = useState<DeleteDialogState>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedDocument = useMemo(
@@ -171,16 +195,51 @@ export function ArchiveShell() {
     }
   }
 
-  async function createFolder() {
-    const name = window.prompt("Folder name");
-    if (!name?.trim()) return;
+  async function saveFolder(name: string) {
+    if (!folderDialog) return;
     try {
       setBusy(true);
-      const folder = await api.createFolder(name.trim(), selectedFolderId);
-      await refresh(folder.id);
-      setSelectedFolderId(folder.id);
-    } catch (createError) {
-      setError(createError instanceof Error ? createError.message : "Failed to create folder.");
+      setError(null);
+      if (folderDialog.mode === "create") {
+        const folder = await api.createFolder(name.trim(), folderDialog.parentId);
+        await refresh(folder.id);
+        setFolders((current) => mergeFolderIntoList(current, folder));
+        setSelectedFolderId(folder.id);
+      } else {
+        const folder = await api.updateFolder(folderDialog.folder.id, { name: name.trim() });
+        await refresh(selectedFolderId);
+        setFolders((current) => mergeFolderIntoList(current, folder));
+        setSelectedFolderId(folder.id);
+      }
+      setFolderDialog(null);
+    } catch (folderError) {
+      setError(folderError instanceof Error ? folderError.message : "Failed to save folder.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteSelectedItem() {
+    if (!deleteDialog) return;
+    try {
+      setBusy(true);
+      setError(null);
+      if (deleteDialog.type === "folder") {
+        await api.deleteFolder(deleteDialog.folder.id);
+        const nextFolderId = selectedFolderId === deleteDialog.folder.id ? null : selectedFolderId;
+        setSelectedFolderId(nextFolderId);
+        await refresh(nextFolderId);
+        setFolders((current) => current.filter((folder) => folder.id !== deleteDialog.folder.id));
+      } else {
+        await api.deleteDocument(deleteDialog.document.id);
+        await refresh(selectedFolderId);
+        setDocuments((current) => current.filter((document) => document.id !== deleteDialog.document.id));
+        if (selectedDocumentId === deleteDialog.document.id) setSelectedDocumentId(null);
+      }
+      setDeleteDialog(null);
+      setSearchResults(null);
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Delete failed.");
     } finally {
       setBusy(false);
     }
@@ -242,7 +301,10 @@ export function ArchiveShell() {
         folders={folders}
         selectedFolderId={selectedFolderId}
         onSelectFolder={selectFolder}
-        onCreateFolder={createFolder}
+        onCreateFolder={(parentId) => setFolderDialog({ mode: "create", parentId })}
+        onDeleteFolder={(folder) => setDeleteDialog({ type: "folder", folder })}
+        onRenameFolder={(folder) => setFolderDialog({ mode: "rename", folder })}
+        onShowFolderContextMenu={(folder, x, y) => setContextMenu({ type: "folder", folder, x, y })}
         onUpload={() => fileInputRef.current?.click()}
       />
       <ArchiveWorkspace
@@ -260,10 +322,12 @@ export function ArchiveShell() {
           setSearchQuery("");
           setSearchResults(null);
         }}
-        onCreateFolder={createFolder}
+        onCreateFolder={() => setFolderDialog({ mode: "create", parentId: selectedFolderId })}
+        onDeleteDocument={(document) => setDeleteDialog({ type: "document", document })}
         onRunSearch={runSearch}
         onSearchQueryChange={setSearchQuery}
         onSelectDocument={setSelectedDocumentId}
+        onShowDocumentContextMenu={(document, x, y) => setContextMenu({ type: "document", document, x, y })}
         onUpload={() => fileInputRef.current?.click()}
       />
       <input
@@ -280,6 +344,26 @@ export function ArchiveShell() {
         selectedFolderId={selectedFolderId}
         onClose={() => setAiAction(null)}
         onGenerated={afterGeneration}
+      />
+      <FolderFormDialog
+        busy={busy}
+        state={folderDialog}
+        onClose={() => setFolderDialog(null)}
+        onSubmit={saveFolder}
+      />
+      <DeleteConfirmDialog
+        busy={busy}
+        state={deleteDialog}
+        onClose={() => setDeleteDialog(null)}
+        onConfirm={deleteSelectedItem}
+      />
+      <ArchiveContextMenu
+        state={contextMenu}
+        onClose={() => setContextMenu(null)}
+        onCreateFolder={(parentId) => setFolderDialog({ mode: "create", parentId })}
+        onRenameFolder={(folder) => setFolderDialog({ mode: "rename", folder })}
+        onDeleteFolder={(folder) => setDeleteDialog({ type: "folder", folder })}
+        onDeleteDocument={(document) => setDeleteDialog({ type: "document", document })}
       />
     </SidebarProvider>
   );
@@ -298,9 +382,11 @@ function ArchiveWorkspace({
   onAction,
   onClearSearch,
   onCreateFolder,
+  onDeleteDocument,
   onRunSearch,
   onSearchQueryChange,
   onSelectDocument,
+  onShowDocumentContextMenu,
   onUpload,
 }: {
   busy: boolean;
@@ -315,9 +401,11 @@ function ArchiveWorkspace({
   onAction: (action: AIAction) => void;
   onClearSearch: () => void;
   onCreateFolder: () => void;
+  onDeleteDocument: (document: ArchiveDocument) => void;
   onRunSearch: () => void;
   onSearchQueryChange: (query: string) => void;
   onSelectDocument: (documentId: string) => void;
+  onShowDocumentContextMenu: (document: ArchiveDocument, x: number, y: number) => void;
   onUpload: () => void;
 }) {
   const folderSidebar = useSidebar();
@@ -432,11 +520,12 @@ function ArchiveWorkspace({
                 </div>
 
                 <div className="overflow-hidden rounded-md border bg-card">
-                  <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-3 border-b px-3 py-2 text-xs font-medium uppercase text-muted-foreground md:grid-cols-[minmax(0,1.6fr)_120px_110px_112px]">
+                  <div className="grid grid-cols-[minmax(0,1fr)_96px_36px] gap-3 border-b px-3 py-2 text-xs font-medium uppercase text-muted-foreground md:grid-cols-[minmax(0,1.6fr)_120px_110px_112px_36px]">
                     <span>Name</span>
                     <span className="hidden md:block">Modified</span>
                     <span className="hidden md:block">Size</span>
                     <span>Status</span>
+                    <span className="sr-only">Actions</span>
                   </div>
                   <div className="divide-y">
                     {loading ? (
@@ -446,6 +535,9 @@ function ArchiveWorkspace({
                         <DocumentRow
                           key={document.id}
                           document={document}
+                          onDelete={() => onDeleteDocument(document)}
+                          onOpen={() => window.open(api.downloadUrl(document.id), "_blank", "noreferrer")}
+                          onShowContextMenu={(x, y) => onShowDocumentContextMenu(document, x, y)}
                           selected={selectedDocument?.id === document.id}
                           onSelect={() => selectDocumentFromRow(document.id)}
                         />
@@ -482,16 +574,287 @@ function HeaderTooltip({
   );
 }
 
-function DocumentRow({ document, selected, onSelect }: { document: ArchiveDocument; selected: boolean; onSelect: () => void }) {
+function FolderFormDialog({
+  busy,
+  state,
+  onClose,
+  onSubmit,
+}: {
+  busy: boolean;
+  state: FolderDialogState;
+  onClose: () => void;
+  onSubmit: (name: string) => void;
+}) {
+  const title = state?.mode === "rename" ? "Rename folder" : "New folder";
+  const initialName = state?.mode === "rename" ? state.folder.name : "";
+
+  return (
+    <Dialog open={Boolean(state)} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>
+            {state?.mode === "rename" ? "Update the folder name." : "Create a folder in the selected location."}
+          </DialogDescription>
+        </DialogHeader>
+        {state && (
+          <FolderFormFields
+            key={state.mode === "rename" ? state.folder.id : `create-${state.parentId ?? "root"}`}
+            busy={busy}
+            initialName={initialName}
+            onClose={onClose}
+            onSubmit={onSubmit}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function FolderFormFields({
+  busy,
+  initialName,
+  onClose,
+  onSubmit,
+}: {
+  busy: boolean;
+  initialName: string;
+  onClose: () => void;
+  onSubmit: (name: string) => void;
+}) {
+  const [name, setName] = useState(initialName);
+
+  return (
+    <form
+      className="space-y-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (name.trim()) onSubmit(name.trim());
+      }}
+    >
+      <div className="space-y-2">
+        <Label htmlFor="folder-name">Folder name</Label>
+        <Input
+          id="folder-name"
+          autoFocus
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="Folder name"
+        />
+      </div>
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={busy || !name.trim()}>
+          {busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
+          Save
+        </Button>
+      </DialogFooter>
+    </form>
+  );
+}
+
+function DeleteConfirmDialog({
+  busy,
+  state,
+  onClose,
+  onConfirm,
+}: {
+  busy: boolean;
+  state: DeleteDialogState;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const title = state?.type === "folder" ? "Delete folder" : "Delete document";
+  const targetName =
+    state?.type === "folder"
+      ? state.folder.name
+      : state?.type === "document"
+        ? state.document.title || state.document.original_filename
+        : "";
+
+  return (
+    <Dialog open={Boolean(state)} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>
+            Delete {targetName}. Non-empty folders can only be deleted after their documents and subfolders are removed.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+          <Button type="button" variant="destructive" onClick={onConfirm} disabled={busy}>
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+            Delete
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ArchiveContextMenu({
+  state,
+  onClose,
+  onCreateFolder,
+  onRenameFolder,
+  onDeleteFolder,
+  onDeleteDocument,
+}: {
+  state: ContextMenuState;
+  onClose: () => void;
+  onCreateFolder: (parentId: string | null) => void;
+  onRenameFolder: (folder: FolderType) => void;
+  onDeleteFolder: (folder: FolderType) => void;
+  onDeleteDocument: (document: ArchiveDocument) => void;
+}) {
+  useEffect(() => {
+    if (!state) return;
+    function close() {
+      onClose();
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("click", close);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [onClose, state]);
+
+  if (!state) return null;
+
+  return (
+    <div
+      className="fixed z-50 min-w-44 rounded-md bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10"
+      style={{ left: state.x, top: state.y }}
+      onClick={(event) => event.stopPropagation()}
+      role="menu"
+    >
+      {state.type === "folder" ? (
+        <>
+          <ContextMenuButton
+            icon={FolderPlus}
+            label="New subfolder"
+            onClick={() => {
+              onCreateFolder(state.folder.id);
+              onClose();
+            }}
+          />
+          <ContextMenuButton
+            icon={FolderPen}
+            label="Rename"
+            onClick={() => {
+              onRenameFolder(state.folder);
+              onClose();
+            }}
+          />
+          <div className="-mx-1 my-1 h-px bg-border" />
+          <ContextMenuButton
+            destructive
+            icon={Trash2}
+            label="Delete folder"
+            onClick={() => {
+              onDeleteFolder(state.folder);
+              onClose();
+            }}
+          />
+        </>
+      ) : (
+        <>
+          <ContextMenuButton
+            icon={MoreHorizontal}
+            label="Open original"
+            onClick={() => {
+              window.open(api.downloadUrl(state.document.id), "_blank", "noreferrer");
+              onClose();
+            }}
+          />
+          <div className="-mx-1 my-1 h-px bg-border" />
+          <ContextMenuButton
+            destructive
+            icon={Trash2}
+            label="Delete document"
+            onClick={() => {
+              onDeleteDocument(state.document);
+              onClose();
+            }}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+function ContextMenuButton({
+  destructive,
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  destructive?: boolean;
+  icon: ElementType;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground",
+        destructive && "text-destructive hover:bg-destructive/10 hover:text-destructive",
+      )}
+      onClick={onClick}
+      role="menuitem"
+    >
+      <Icon className="size-4" />
+      {label}
+    </button>
+  );
+}
+
+function DocumentRow({
+  document,
+  selected,
+  onDelete,
+  onOpen,
+  onSelect,
+  onShowContextMenu,
+}: {
+  document: ArchiveDocument;
+  selected: boolean;
+  onDelete: () => void;
+  onOpen: () => void;
+  onSelect: () => void;
+  onShowContextMenu: (x: number, y: number) => void;
+}) {
   const kind = documentKind(document);
   const Icon = fileIcon[kind];
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       className={cn(
-        "grid w-full grid-cols-[minmax(0,1fr)_96px] items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/50 md:grid-cols-[minmax(0,1.6fr)_120px_110px_112px]",
+        "grid w-full grid-cols-[minmax(0,1fr)_96px_36px] items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/50 md:grid-cols-[minmax(0,1.6fr)_120px_110px_112px_36px]",
         selected && "bg-primary/10",
       )}
       onClick={onSelect}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onShowContextMenu(event.clientX, event.clientY);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelect();
+        }
+      }}
     >
       <span className="flex min-w-0 items-center gap-3">
         <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-md ring-1", fileTone[kind])}>
@@ -507,7 +870,51 @@ function DocumentRow({ document, selected, onSelect }: { document: ArchiveDocume
       <span>
         <Badge variant={document.processing_status === "failed" ? "destructive" : "outline"}>{document.processing_status}</Badge>
       </span>
-    </button>
+      <DocumentRowMenu
+        onDelete={onDelete}
+        onOpen={onOpen}
+      />
+    </div>
+  );
+}
+
+function DocumentRowMenu({ onDelete, onOpen }: { onDelete: () => void; onOpen: () => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Document actions"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <MoreHorizontal className="size-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuItem
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpen();
+          }}
+        >
+          <MoreHorizontal className="size-4" />
+          Open original
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          variant="destructive"
+          onClick={(event) => {
+            event.stopPropagation();
+            onDelete();
+          }}
+        >
+          <Trash2 className="size-4" />
+          Delete document
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -757,14 +1164,22 @@ function ArchiveSidebar({
   selectedFolderId,
   onSelectFolder,
   onCreateFolder,
+  onDeleteFolder,
+  onRenameFolder,
+  onShowFolderContextMenu,
   onUpload,
 }: {
   folders: FolderType[];
   selectedFolderId: string | null;
   onSelectFolder: (folderId: string | null) => void;
-  onCreateFolder: () => void;
+  onCreateFolder: (parentId: string | null) => void;
+  onDeleteFolder: (folder: FolderType) => void;
+  onRenameFolder: (folder: FolderType) => void;
+  onShowFolderContextMenu: (folder: FolderType, x: number, y: number) => void;
   onUpload: () => void;
 }) {
+  const tree = useMemo(() => buildFolderTree(folders), [folders]);
+
   return (
     <Sidebar collapsible="icon" className="border-r">
       <SidebarHeader className="mt-1 h-[49px] shrink-0 justify-center">
@@ -779,7 +1194,7 @@ function ArchiveSidebar({
                 <span className="block truncate text-xs text-sidebar-foreground/60">PostgreSQL + pgvector</span>
               </span>
             </SidebarMenuButton>
-            <SidebarMenuAction aria-label="Create folder" onClick={onCreateFolder}>
+            <SidebarMenuAction aria-label="Create folder" onClick={() => onCreateFolder(selectedFolderId)}>
               <Plus />
             </SidebarMenuAction>
           </SidebarMenuItem>
@@ -797,19 +1212,17 @@ function ArchiveSidebar({
                   <span>All folders</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-              {folders.map((folder) => (
-                <SidebarMenuItem key={folder.id}>
-                  <SidebarMenuButton
-                    isActive={selectedFolderId === folder.id}
-                    size="sm"
-                    tooltip={folder.path ?? folder.name}
-                    className="h-7 text-xs"
-                    onClick={() => onSelectFolder(folder.id)}
-                  >
-                    {selectedFolderId === folder.id ? <FolderOpen className="size-3.5" /> : <Folder className="size-3.5" />}
-                    <span>{folder.name}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+              {tree.map((node) => (
+                <FolderTreeItem
+                  key={node.folder.id}
+                  node={node}
+                  selectedFolderId={selectedFolderId}
+                  onCreateFolder={onCreateFolder}
+                  onDeleteFolder={onDeleteFolder}
+                  onRenameFolder={onRenameFolder}
+                  onSelectFolder={onSelectFolder}
+                  onShowFolderContextMenu={onShowFolderContextMenu}
+                />
               ))}
             </SidebarMenu>
           </SidebarGroupContent>
@@ -833,6 +1246,112 @@ function ArchiveSidebar({
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
+  );
+}
+
+type FolderTreeNode = {
+  folder: FolderType;
+  children: FolderTreeNode[];
+  depth: number;
+};
+
+function FolderTreeItem({
+  node,
+  selectedFolderId,
+  onCreateFolder,
+  onDeleteFolder,
+  onRenameFolder,
+  onSelectFolder,
+  onShowFolderContextMenu,
+}: {
+  node: FolderTreeNode;
+  selectedFolderId: string | null;
+  onCreateFolder: (parentId: string | null) => void;
+  onDeleteFolder: (folder: FolderType) => void;
+  onRenameFolder: (folder: FolderType) => void;
+  onSelectFolder: (folderId: string | null) => void;
+  onShowFolderContextMenu: (folder: FolderType, x: number, y: number) => void;
+}) {
+  const isActive = selectedFolderId === node.folder.id;
+
+  return (
+    <>
+      <SidebarMenuItem
+        onContextMenu={(event) => {
+          event.preventDefault();
+          onShowFolderContextMenu(node.folder, event.clientX, event.clientY);
+        }}
+      >
+        <SidebarMenuButton
+          isActive={isActive}
+          size="sm"
+          tooltip={node.folder.path ?? node.folder.name}
+          className="h-7 text-xs"
+          style={{ paddingLeft: `${0.5 + node.depth * 0.85}rem` }}
+          onClick={() => onSelectFolder(node.folder.id)}
+        >
+          {isActive ? <FolderOpen className="size-3.5" /> : <Folder className="size-3.5" />}
+          <span>{node.folder.name}</span>
+        </SidebarMenuButton>
+        <FolderRowMenu
+          folder={node.folder}
+          onCreateFolder={() => onCreateFolder(node.folder.id)}
+          onDeleteFolder={() => onDeleteFolder(node.folder)}
+          onRenameFolder={() => onRenameFolder(node.folder)}
+        />
+      </SidebarMenuItem>
+      {node.children.map((child) => (
+        <FolderTreeItem
+          key={child.folder.id}
+          node={child}
+          selectedFolderId={selectedFolderId}
+          onCreateFolder={onCreateFolder}
+          onDeleteFolder={onDeleteFolder}
+          onRenameFolder={onRenameFolder}
+          onSelectFolder={onSelectFolder}
+          onShowFolderContextMenu={onShowFolderContextMenu}
+        />
+      ))}
+    </>
+  );
+}
+
+function FolderRowMenu({
+  folder,
+  onCreateFolder,
+  onDeleteFolder,
+  onRenameFolder,
+}: {
+  folder: FolderType;
+  onCreateFolder: () => void;
+  onDeleteFolder: () => void;
+  onRenameFolder: () => void;
+}) {
+  const { isMobile } = useSidebar();
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <SidebarMenuAction aria-label={`${folder.name} actions`} onClick={(event) => event.stopPropagation()}>
+          <MoreHorizontal />
+        </SidebarMenuAction>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side={isMobile ? "bottom" : "right"} align={isMobile ? "end" : "start"} className="w-44">
+        <DropdownMenuItem onClick={onCreateFolder}>
+          <FolderPlus className="size-4" />
+          New subfolder
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onRenameFolder}>
+          <FolderPen className="size-4" />
+          Rename
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem variant="destructive" onClick={onDeleteFolder}>
+          <Trash2 className="size-4" />
+          Delete folder
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -909,4 +1428,37 @@ function mergeSearchResults(keywordResults: SearchResult[], semanticResults: Sea
   }
 
   return Array.from(merged.values()).sort((left, right) => (right.score ?? 0) - (left.score ?? 0));
+}
+
+function buildFolderTree(folders: FolderType[]) {
+  const nodes = new Map<string, FolderTreeNode>();
+  const roots: FolderTreeNode[] = [];
+
+  for (const folder of folders) {
+    nodes.set(folder.id, { folder, children: [], depth: 0 });
+  }
+
+  for (const node of nodes.values()) {
+    const parent = node.folder.parent_id ? nodes.get(node.folder.parent_id) : null;
+    if (parent) parent.children.push(node);
+    else roots.push(node);
+  }
+
+  function sortAndMark(items: FolderTreeNode[], depth: number) {
+    items.sort((left, right) => left.folder.name.localeCompare(right.folder.name));
+    for (const item of items) {
+      item.depth = depth;
+      sortAndMark(item.children, depth + 1);
+    }
+  }
+
+  sortAndMark(roots, 0);
+  return roots;
+}
+
+function mergeFolderIntoList(folders: FolderType[], folder: FolderType) {
+  if (folders.some((item) => item.id === folder.id)) {
+    return folders.map((item) => (item.id === folder.id ? folder : item));
+  }
+  return [...folders, folder];
 }

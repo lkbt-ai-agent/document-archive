@@ -78,6 +78,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const body = await response.json().catch(() => ({}));
     throw new Error(body.detail ?? `Request failed: ${response.status}`);
   }
+  if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
 
@@ -88,10 +89,23 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ name, parent_id: parentId }),
     }),
+  updateFolder: (folderId: string, payload: { name?: string; parent_id?: string | null }) =>
+    request<Folder>(`/folders/${folderId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  deleteFolder: (folderId: string) =>
+    request<void>(`/folders/${folderId}`, {
+      method: "DELETE",
+    }),
   documents: (folderId?: string | null) => {
     const query = folderId ? `?folder_id=${folderId}` : "";
     return request<ArchiveDocument[]>(`/documents${query}`);
   },
+  deleteDocument: (documentId: string) =>
+    request<void>(`/documents/${documentId}`, {
+      method: "DELETE",
+    }),
   uploadDocument: (folderId: string, file: File) => {
     const form = new FormData();
     form.append("folder_id", folderId);
