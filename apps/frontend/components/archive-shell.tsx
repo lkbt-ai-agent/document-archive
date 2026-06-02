@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ElementT
 import {
   Archive,
   Bot,
+  Building2,
   CalendarDays,
   Check,
   ChevronRight,
@@ -19,6 +20,7 @@ import {
   FolderOpen,
   HardDrive,
   Info,
+  Languages,
   Loader2,
   MoreHorizontal,
   PanelLeft,
@@ -29,6 +31,7 @@ import {
   Tag,
   Trash2,
   Upload,
+  Users,
   X,
 } from "lucide-react";
 
@@ -1268,9 +1271,9 @@ function MetadataSidebar({
         <div className="text-sm font-semibold">문서 메타데이터</div>
         <MetadataSidebarClose />
       </SidebarHeader>
-      <SidebarContent className="gap-0 overflow-x-hidden bg-background">
-        <ScrollArea className="h-[calc(100vh-49px)] overflow-x-hidden">
-          <div className="space-y-6 p-6">
+      <SidebarContent className="min-h-0 gap-0 overflow-hidden bg-background">
+        <ScrollArea className="h-[calc(100vh-49px)] min-h-0 overflow-hidden">
+          <div className="min-w-0 max-w-full space-y-6 p-6">
             {!selected ? (
               <p className="text-sm text-muted-foreground">메타데이터를 확인할 문서를 선택하세요.</p>
             ) : (
@@ -1291,23 +1294,45 @@ function MetadataSidebar({
                 <Separator />
 
                 <section className="space-y-3">
-                  <h3 className="text-xs font-semibold uppercase text-muted-foreground">메타데이터</h3>
+                  <h3 className="text-xs font-semibold uppercase text-muted-foreground">파일 정보</h3>
                   <dl className="space-y-3 text-sm">
                     <MetaRow icon={Folder} label="폴더" value={selected.folder_id ? (folder?.path ?? "알 수 없음") : "내 드라이브"} />
+                    <MetaRow icon={FileText} label="제목" value={selected.title || "없음"} />
+                    {selected.corrected_filename && selected.corrected_filename !== selected.title && (
+                      <MetaRow icon={Sparkles} label="AI 보정명" value={selected.corrected_filename} />
+                    )}
                     <MetaRow icon={FileText} label="원본 파일명" value={selected.original_filename} />
+                    <MetaRow icon={FileType} label="MIME" value={selected.mime_type} />
+                    <MetaRow icon={HardDrive} label="크기" value={`${formatSize(selected.file_size)} (${selected.file_size.toLocaleString("ko-KR")} bytes)`} />
+                    <MetaRow icon={Info} label="소스" value={selected.source_type} />
                     <MetaRow icon={CalendarDays} label="생성일" value={formatDate(selected.created_at)} />
                     <MetaRow icon={Clock3} label="수정일" value={formatDate(selected.updated_at)} />
-                    <MetaRow icon={Info} label="유형" value={selected.is_generated ? "생성됨" : "업로드됨"} />
-                    <MetaRow icon={Tag} label="태그" value={selected.metadata_row?.tags.join(", ") || "없음"} />
                   </dl>
-                  {selected.metadata_row?.summary && (
-                    <p className="overflow-hidden rounded-md border bg-muted/40 p-3 text-sm leading-6 break-words">
-                      {selected.metadata_row.summary}
+                  {selected.processing_error && (
+                    <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive break-words [overflow-wrap:anywhere]">
+                      {selected.processing_error}
                     </p>
                   )}
-                  {selected.processing_error && (
-                    <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-                      {selected.processing_error}
+                </section>
+
+                <Separator />
+
+                <section className="space-y-3">
+                  <h3 className="text-xs font-semibold uppercase text-muted-foreground">AI 메타데이터</h3>
+                  <dl className="space-y-3 text-sm">
+                    <MetaRow icon={Tag} label="태그" value={selected.metadata_row?.tags.join(", ") || "없음"} />
+                    <MetaRow icon={Languages} label="언어" value={selected.metadata_row?.language || "없음"} />
+                    <MetaRow icon={FileType} label="문서 유형" value={selected.metadata_row?.document_type || "없음"} />
+                    <MetaRow icon={Users} label="인물" value={formatList(selected.metadata_row?.people)} />
+                    <MetaRow icon={Building2} label="기관" value={formatList(selected.metadata_row?.organizations)} />
+                    <MetaRow icon={CalendarDays} label="주요 날짜" value={formatList(selected.metadata_row?.key_dates)} />
+                    <MetaRow icon={Bot} label="모델" value={selected.metadata_row?.model_name || "없음"} />
+                    <MetaRow icon={Bot} label="모델 버전" value={selected.metadata_row?.model_version || "없음"} />
+                    <MetaRow icon={Clock3} label="추출 시각" value={selected.metadata_row ? formatDate(selected.metadata_row.generated_at) : "없음"} />
+                  </dl>
+                  {selected.metadata_row?.summary && (
+                    <p className="overflow-hidden rounded-md border bg-muted/40 p-3 text-sm leading-6 break-words [overflow-wrap:anywhere]">
+                      {selected.metadata_row.summary}
                     </p>
                   )}
                 </section>
@@ -1321,9 +1346,9 @@ function MetadataSidebar({
                   </div>
                   <div className="space-y-2">
                     {(Object.keys(actionLabels) as AIAction[]).map((action) => (
-                      <Button key={action} variant="outline" size="sm" className="w-full justify-start" onClick={() => onAction(action)}>
+                      <Button key={action} variant="outline" size="sm" className="w-full min-w-0 justify-start" onClick={() => onAction(action)}>
                         <Sparkles className="size-4" />
-                        {actionLabels[action]}
+                        <span className="truncate">{actionLabels[action]}</span>
                       </Button>
                     ))}
                   </div>
@@ -1691,10 +1716,10 @@ function MetadataSidebarClose() {
 
 function MetaRow({ icon: Icon, label, value }: { icon: ElementType; label: string; value: string }) {
   return (
-    <div className="flex items-start gap-3">
+    <div className="grid min-w-0 grid-cols-[1rem_5rem_minmax(0,1fr)] items-start gap-3">
       <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-      <dt className="min-w-20 shrink-0 text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 flex-1 break-words font-medium">{value}</dd>
+      <dt className="min-w-0 text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 break-words font-medium [overflow-wrap:anywhere]">{value}</dd>
     </div>
   );
 }
@@ -1717,6 +1742,10 @@ function formatDate(value: string) {
 
 function formatElapsedSeconds(seconds: number) {
   return Math.max(0.1, seconds).toFixed(1);
+}
+
+function formatList(values: string[] | undefined) {
+  return values?.length ? values.join(", ") : "없음";
 }
 
 function documentDisplayName(document: ArchiveDocument) {

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+from pathlib import Path
+import re
 import uuid
 
 from sqlalchemy.orm import Session
@@ -9,6 +11,17 @@ from app.ai.llama_cpp_provider import get_embedding_provider, get_ocr_provider, 
 from app.db.models import Document, DocumentChunk, DocumentMetadata, DocumentSourceType, Folder, ProcessingStatus
 from app.modules.extraction.service import TextExtractionService, chunk_text
 from app.modules.storage.service import StorageService
+
+
+def corrected_filename_from_title(title: str, original_filename: str) -> str:
+    suffix = Path(original_filename).suffix
+    stem = re.sub(r"[\x00-\x1f<>:\"/\\|?*]+", " ", title)
+    stem = re.sub(r"\s+", " ", stem).strip(" .")
+    if not stem:
+        stem = Path(original_filename).stem or "document"
+    if suffix and stem.lower().endswith(suffix.lower()):
+        return stem[:512]
+    return f"{stem}{suffix}"[:512]
 
 
 class DocumentService:
@@ -84,7 +97,7 @@ class DocumentService:
         embedding = get_embedding_provider()
         metadata = generation.generate_metadata(text)
         document.title = metadata.title
-        document.corrected_filename = metadata.title
+        document.corrected_filename = corrected_filename_from_title(metadata.title, document.original_filename)
         self.db.add(
             DocumentMetadata(
                 document_id=document.id,
