@@ -48,6 +48,7 @@ class DocumentRead(BaseModel):
     id: uuid.UUID
     folder_id: uuid.UUID | None
     title: str | None
+    corrected_filename: str | None
     original_filename: str
     mime_type: str
     file_size: int
@@ -91,6 +92,7 @@ class SearchResult(BaseModel):
     chunk_id: uuid.UUID
     document_id: uuid.UUID
     title: str | None
+    corrected_filename: str | None = None
     content: str
     score: float | None = None
 

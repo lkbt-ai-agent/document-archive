@@ -28,7 +28,14 @@ def keyword_search(payload: KeywordSearchRequest, db: Session = Depends(get_db))
     elif payload.folder_id:
         stmt = stmt.where(Document.folder_id == payload.folder_id)
     return [
-        SearchResult(chunk_id=chunk.id, document_id=document.id, title=document.title, content=chunk.content, score=None)
+        SearchResult(
+            chunk_id=chunk.id,
+            document_id=document.id,
+            title=document.title,
+            corrected_filename=document.corrected_filename,
+            content=chunk.content,
+            score=None,
+        )
         for chunk, document in db.execute(stmt).all()
     ]
 
@@ -54,5 +61,14 @@ def semantic_search(payload: SemanticSearchRequest, db: Session = Depends(get_db
         stmt = stmt.where(Document.folder_id == payload.folder_id)
     results: list[SearchResult] = []
     for chunk, document, dist in db.execute(stmt).all():
-        results.append(SearchResult(chunk_id=chunk.id, document_id=document.id, title=document.title, content=chunk.content, score=float(1 - dist)))
+        results.append(
+            SearchResult(
+                chunk_id=chunk.id,
+                document_id=document.id,
+                title=document.title,
+                corrected_filename=document.corrected_filename,
+                content=chunk.content,
+                score=float(1 - dist),
+            )
+        )
     return results

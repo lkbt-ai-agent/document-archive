@@ -21,6 +21,7 @@ def init_db() -> None:
     if engine.dialect.name == "postgresql":
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE documents ALTER COLUMN folder_id DROP NOT NULL"))
+            conn.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS corrected_filename VARCHAR(512)"))
 
 
 def get_db() -> Generator[Session]:

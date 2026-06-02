@@ -20,8 +20,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Document Archive",
-  description: "A personal document archive UI skeleton.",
+  title: "문서 아카이브",
+  description: "개인 문서 아카이브 화면입니다.",
 };
 
 export default function RootLayout({
@@ -31,7 +31,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="ko"
       className={cn(
         "h-full",
         "antialiased",

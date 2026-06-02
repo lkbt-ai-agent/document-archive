@@ -8,6 +8,8 @@ import {
   Check,
   ChevronRight,
   Clock3,
+  Download,
+  Eye,
   FileImage,
   FileText,
   FileType,
@@ -34,6 +36,11 @@ import { api, type ArchiveDocument, type Folder as FolderType, type Lineage, typ
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -72,6 +79,13 @@ import {
 } from "@/components/ui/sidebar";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Toast,
+  ToastDescription,
+  ToastProvider,
+  ToastTitle,
+  ToastViewport,
+} from "@/components/ui/toast";
+import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -79,6 +93,7 @@ import {
 import { cn } from "@/lib/utils";
 
 type AIAction = "summarize" | "draft" | "report" | "rewrite-style" | "merge-documents";
+type SearchMode = "keyword" | "semantic";
 type FolderDialogState =
   | { mode: "create"; parentId: string | null }
   | { mode: "rename"; folder: FolderType }
@@ -93,11 +108,11 @@ type ContextMenuState =
   | null;
 
 const actionLabels: Record<AIAction, string> = {
-  summarize: "Summarize",
-  draft: "Draft",
-  report: "Write report",
-  "rewrite-style": "Change style",
-  "merge-documents": "Merge documents",
+  summarize: "요약",
+  draft: "초안 작성",
+  report: "보고서 작성",
+  "rewrite-style": "문체 변경",
+  "merge-documents": "문서 병합",
 };
 
 const fileIcon = {
@@ -115,9 +130,11 @@ const fileTone = {
 export function ArchiveShell() {
   const [folders, setFolders] = useState<FolderType[]>([]);
   const [documents, setDocuments] = useState<ArchiveDocument[]>([]);
+  const [searchDocuments, setSearchDocuments] = useState<ArchiveDocument[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null);
+  const [searchMode, setSearchMode] = useState<SearchMode | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -126,11 +143,15 @@ export function ArchiveShell() {
   const [folderDialog, setFolderDialog] = useState<FolderDialogState>(null);
   const [deleteDialog, setDeleteDialog] = useState<DeleteDialogState>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
+  const [uploadToast, setUploadToast] = useState<{ documentName: string; elapsedSeconds: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedDocument = useMemo(
-    () => documents.find((document) => document.id === selectedDocumentId) ?? documents[0] ?? null,
-    [documents, selectedDocumentId],
+    () => {
+      const visibleDocuments = uniqueDocuments(searchResults ? [...searchDocuments, ...documents] : documents);
+      return visibleDocuments.find((document) => document.id === selectedDocumentId) ?? visibleDocuments[0] ?? null;
+    },
+    [documents, searchDocuments, searchResults, selectedDocumentId],
   );
 
   async function refresh(folderId = selectedFolderId, preferredDocumentId?: string) {
@@ -163,7 +184,7 @@ export function ArchiveShell() {
           setSelectedDocumentId(nextDocuments[0]?.id ?? null);
         }
       } catch (loadError) {
-        if (!ignore) setError(loadError instanceof Error ? loadError.message : "Failed to load archive.");
+        if (!ignore) setError(loadError instanceof Error ? loadError.message : "아카이브를 불러오지 못했습니다.");
       } finally {
         if (!ignore) setLoading(false);
       }
@@ -174,17 +195,23 @@ export function ArchiveShell() {
     };
   }, []);
 
-  async function selectFolder(folderId: string | null) {
+  async function selectFolder(folderId: string | null, preferredDocumentId?: string) {
     setSelectedFolderId(folderId);
     setSearchResults(null);
+    setSearchMode(null);
+    setSearchDocuments([]);
     setError(null);
     try {
       setBusy(true);
       const nextDocuments = await api.documents(folderId);
       setDocuments(nextDocuments);
-      setSelectedDocumentId(nextDocuments[0]?.id ?? null);
+      setSelectedDocumentId(
+        preferredDocumentId && nextDocuments.some((document) => document.id === preferredDocumentId)
+          ? preferredDocumentId
+          : nextDocuments[0]?.id ?? null,
+      );
     } catch (selectError) {
-      setError(selectError instanceof Error ? selectError.message : "Failed to load documents.");
+      setError(selectError instanceof Error ? selectError.message : "문서를 불러오지 못했습니다.");
     } finally {
       setBusy(false);
     }
@@ -208,7 +235,7 @@ export function ArchiveShell() {
       }
       setFolderDialog(null);
     } catch (folderError) {
-      setError(folderError instanceof Error ? folderError.message : "Failed to save folder.");
+      setError(folderError instanceof Error ? folderError.message : "폴더를 저장하지 못했습니다.");
     } finally {
       setBusy(false);
     }
@@ -234,8 +261,10 @@ export function ArchiveShell() {
       }
       setDeleteDialog(null);
       setSearchResults(null);
+      setSearchMode(null);
+      setSearchDocuments([]);
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Delete failed.");
+      setError(deleteError instanceof Error ? deleteError.message : "삭제하지 못했습니다.");
     } finally {
       setBusy(false);
     }
@@ -243,44 +272,53 @@ export function ArchiveShell() {
 
   async function uploadFile(file: File | null | undefined) {
     if (!file) return;
+    const uploadStartedAt = performance.now();
     try {
       setBusy(true);
       setError(null);
       const document = await api.uploadDocument(selectedFolderId, file);
       await refresh(selectedFolderId, document.id);
       setSearchResults(null);
+      setSearchMode(null);
+      setSearchDocuments([]);
+      setUploadToast({
+        documentName: documentDisplayName(document),
+        elapsedSeconds: (performance.now() - uploadStartedAt) / 1000,
+      });
     } catch (uploadError) {
-      setError(uploadError instanceof Error ? uploadError.message : "Upload failed.");
+      setError(uploadError instanceof Error ? uploadError.message : "업로드하지 못했습니다.");
     } finally {
       setBusy(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
 
-  async function runSearch() {
+  async function runSearch(mode: SearchMode) {
     if (!searchQuery.trim()) {
       setSearchResults(null);
+      setSearchMode(null);
+      setSearchDocuments([]);
       return;
     }
     try {
       setBusy(true);
       setError(null);
-      const [keywordResult, semanticResult] = await Promise.allSettled([
-        api.keywordSearch(searchQuery.trim(), selectedFolderId),
-        api.semanticSearch(searchQuery.trim(), selectedFolderId),
-      ]);
-      const keywordResults = keywordResult.status === "fulfilled" ? keywordResult.value : [];
-      const semanticResults = semanticResult.status === "fulfilled" ? semanticResult.value : [];
-      if (!keywordResults.length && !semanticResults.length) {
-        const failure = keywordResult.status === "rejected" ? keywordResult.reason : semanticResult.status === "rejected" ? semanticResult.reason : null;
-        if (failure) throw failure;
-      }
-      const results = mergeSearchResults(keywordResults, semanticResults);
+      const results = mode === "keyword"
+        ? await api.keywordSearch(searchQuery.trim())
+        : await api.semanticSearch(searchQuery.trim());
+      const resultDocumentIds = Array.from(new Set(results.map((result) => result.document_id)));
+      const loadedDocumentsById = new Map(documents.map((document) => [document.id, document]));
+      const missingDocumentIds = resultDocumentIds.filter((documentId) => !loadedDocumentsById.has(documentId));
+      const fetchedDocuments = missingDocumentIds.length
+        ? await Promise.all(missingDocumentIds.map((documentId) => api.document(documentId)))
+        : [];
       setSearchResults(results);
+      setSearchMode(mode);
+      setSearchDocuments(uniqueDocuments([...resultDocumentIds.map((documentId) => loadedDocumentsById.get(documentId)).filter(isDocument), ...fetchedDocuments]));
       const first = results[0]?.document_id;
       if (first) setSelectedDocumentId(first);
     } catch (searchError) {
-      setError(searchError instanceof Error ? searchError.message : "Search failed.");
+      setError(searchError instanceof Error ? searchError.message : "검색하지 못했습니다.");
     } finally {
       setBusy(false);
     }
@@ -289,80 +327,98 @@ export function ArchiveShell() {
   async function afterGeneration(document: ArchiveDocument) {
     await refresh(selectedFolderId, document.id);
     setSearchResults(null);
+    setSearchMode(null);
+    setSearchDocuments([]);
   }
 
   return (
-    <SidebarProvider defaultOpen>
-      <ArchiveSidebar
-        folders={folders}
-        selectedFolderId={selectedFolderId}
-        onSelectFolder={selectFolder}
-        onCreateFolder={(parentId) => setFolderDialog({ mode: "create", parentId })}
-        onDeleteFolder={(folder) => setDeleteDialog({ type: "folder", folder })}
-        onRenameFolder={(folder) => setFolderDialog({ mode: "rename", folder })}
-        onShowFolderContextMenu={(folder, x, y) => setContextMenu({ type: "folder", folder, x, y })}
-        onUpload={() => fileInputRef.current?.click()}
-      />
-      <ArchiveWorkspace
-        busy={busy}
-        documents={documents}
-        error={error}
-        folders={folders}
-        loading={loading}
-        searchQuery={searchQuery}
-        searchResults={searchResults}
-        selectedDocument={selectedDocument}
-        selectedFolderId={selectedFolderId}
-        onAction={setAiAction}
-        onClearSearch={() => {
-          setSearchQuery("");
-          setSearchResults(null);
-        }}
-        onCreateFolder={() => setFolderDialog({ mode: "create", parentId: selectedFolderId })}
-        onDeleteDocument={(document) => setDeleteDialog({ type: "document", document })}
-        onRunSearch={runSearch}
-        onSearchQueryChange={setSearchQuery}
-        onSelectDocument={setSelectedDocumentId}
-        onSelectFolder={selectFolder}
-        onShowDocumentContextMenu={(document, x, y) => setContextMenu({ type: "document", document, x, y })}
-        onUpload={() => fileInputRef.current?.click()}
-      />
-      <input
-        ref={fileInputRef}
-        className="hidden"
-        type="file"
-        accept=".jpg,.jpeg,.png,.webp,.pdf,.txt,.md"
-        onChange={(event) => uploadFile(event.target.files?.[0])}
-      />
-      <AIActionDialog
-        action={aiAction}
-        documents={documents}
-        selectedDocument={selectedDocument}
-        selectedFolderId={selectedFolderId}
-        onClose={() => setAiAction(null)}
-        onGenerated={afterGeneration}
-      />
-      <FolderFormDialog
-        busy={busy}
-        state={folderDialog}
-        onClose={() => setFolderDialog(null)}
-        onSubmit={saveFolder}
-      />
-      <DeleteConfirmDialog
-        busy={busy}
-        state={deleteDialog}
-        onClose={() => setDeleteDialog(null)}
-        onConfirm={deleteSelectedItem}
-      />
-      <ArchiveContextMenu
-        state={contextMenu}
-        onClose={() => setContextMenu(null)}
-        onCreateFolder={(parentId) => setFolderDialog({ mode: "create", parentId })}
-        onRenameFolder={(folder) => setFolderDialog({ mode: "rename", folder })}
-        onDeleteFolder={(folder) => setDeleteDialog({ type: "folder", folder })}
-        onDeleteDocument={(document) => setDeleteDialog({ type: "document", document })}
-      />
-    </SidebarProvider>
+    <ToastProvider swipeDirection="right">
+      <SidebarProvider defaultOpen>
+        <ArchiveSidebar
+          folders={folders}
+          selectedFolderId={selectedFolderId}
+          onSelectFolder={selectFolder}
+          onCreateFolder={(parentId) => setFolderDialog({ mode: "create", parentId })}
+          onDeleteFolder={(folder) => setDeleteDialog({ type: "folder", folder })}
+          onRenameFolder={(folder) => setFolderDialog({ mode: "rename", folder })}
+          onShowFolderContextMenu={(folder, x, y) => setContextMenu({ type: "folder", folder, x, y })}
+          onUpload={() => fileInputRef.current?.click()}
+        />
+        <ArchiveWorkspace
+          busy={busy}
+          documents={documents}
+          error={error}
+          folders={folders}
+          loading={loading}
+          searchDocuments={searchDocuments}
+          searchMode={searchMode}
+          searchQuery={searchQuery}
+          searchResults={searchResults}
+          selectedDocument={selectedDocument}
+          selectedFolderId={selectedFolderId}
+          onAction={setAiAction}
+          onClearSearch={() => {
+            setSearchQuery("");
+            setSearchResults(null);
+            setSearchMode(null);
+            setSearchDocuments([]);
+          }}
+          onCreateFolder={() => setFolderDialog({ mode: "create", parentId: selectedFolderId })}
+          onDeleteDocument={(document) => setDeleteDialog({ type: "document", document })}
+          onRunSearch={runSearch}
+          onSearchQueryChange={setSearchQuery}
+          onSelectDocument={setSelectedDocumentId}
+          onSelectFolder={selectFolder}
+          onGoToDocumentFolder={(document) => selectFolder(document.folder_id, document.id)}
+          onShowDocumentContextMenu={(document, x, y) => setContextMenu({ type: "document", document, x, y })}
+          onUpload={() => fileInputRef.current?.click()}
+        />
+        <input
+          ref={fileInputRef}
+          className="hidden"
+          type="file"
+          accept=".jpg,.jpeg,.png,.webp,.pdf,.txt,.md"
+          onChange={(event) => uploadFile(event.target.files?.[0])}
+        />
+        <AIActionDialog
+          action={aiAction}
+          documents={documents}
+          selectedDocument={selectedDocument}
+          selectedFolderId={selectedFolderId}
+          onClose={() => setAiAction(null)}
+          onGenerated={afterGeneration}
+        />
+        <FolderFormDialog
+          busy={busy}
+          state={folderDialog}
+          onClose={() => setFolderDialog(null)}
+          onSubmit={saveFolder}
+        />
+        <DeleteConfirmDialog
+          busy={busy}
+          state={deleteDialog}
+          onClose={() => setDeleteDialog(null)}
+          onConfirm={deleteSelectedItem}
+        />
+        <ArchiveContextMenu
+          state={contextMenu}
+          onClose={() => setContextMenu(null)}
+          onCreateFolder={(parentId) => setFolderDialog({ mode: "create", parentId })}
+          onRenameFolder={(folder) => setFolderDialog({ mode: "rename", folder })}
+          onDeleteFolder={(folder) => setDeleteDialog({ type: "folder", folder })}
+          onDeleteDocument={(document) => setDeleteDialog({ type: "document", document })}
+        />
+      </SidebarProvider>
+      <Toast open={Boolean(uploadToast)} onOpenChange={(open) => !open && setUploadToast(null)}>
+        <ToastTitle>업로드 완료</ToastTitle>
+        <ToastDescription>
+          {uploadToast
+            ? `${uploadToast.documentName} 업로드가 ${formatElapsedSeconds(uploadToast.elapsedSeconds)}초 만에 완료되었습니다.`
+            : ""}
+        </ToastDescription>
+      </Toast>
+      <ToastViewport />
+    </ToastProvider>
   );
 }
 
@@ -372,6 +428,8 @@ function ArchiveWorkspace({
   error,
   folders,
   loading,
+  searchDocuments,
+  searchMode,
   searchQuery,
   searchResults,
   selectedDocument,
@@ -382,6 +440,7 @@ function ArchiveWorkspace({
   onDeleteDocument,
   onRunSearch,
   onSearchQueryChange,
+  onGoToDocumentFolder,
   onSelectDocument,
   onSelectFolder,
   onShowDocumentContextMenu,
@@ -392,6 +451,8 @@ function ArchiveWorkspace({
   error: string | null;
   folders: FolderType[];
   loading: boolean;
+  searchDocuments: ArchiveDocument[];
+  searchMode: SearchMode | null;
   searchQuery: string;
   searchResults: SearchResult[] | null;
   selectedDocument: ArchiveDocument | null;
@@ -400,8 +461,9 @@ function ArchiveWorkspace({
   onClearSearch: () => void;
   onCreateFolder: () => void;
   onDeleteDocument: (document: ArchiveDocument) => void;
-  onRunSearch: () => void;
+  onRunSearch: (mode: SearchMode) => void;
   onSearchQueryChange: (query: string) => void;
+  onGoToDocumentFolder: (document: ArchiveDocument) => void;
   onSelectDocument: (documentId: string) => void;
   onSelectFolder: (folderId: string | null) => void;
   onShowDocumentContextMenu: (document: ArchiveDocument, x: number, y: number) => void;
@@ -411,15 +473,16 @@ function ArchiveWorkspace({
   const [metadataOpen, setMetadataOpen] = useState(false);
   const selectedFolder = folders.find((folder) => folder.id === selectedFolderId) ?? null;
   const rows = searchResults
-    ? searchResults.map((result) => documents.find((document) => document.id === result.document_id)).filter(Boolean)
+    ? searchResults.map((result) => searchDocuments.find((document) => document.id === result.document_id)).filter(isDocument)
     : documents;
-  const uniqueRows = Array.from(new Map(rows.map((document) => [document!.id, document!])).values());
+  const uniqueRows = uniqueDocuments(rows);
+  const searchResultsByDocumentId = searchResultsByDocument(searchResults);
   const childFolders = searchResults
     ? []
     : folders
         .filter((folder) => folder.parent_id === selectedFolderId)
         .sort((left, right) => left.name.localeCompare(right.name));
-  const locationLabel = selectedFolder?.path ?? "My Drive";
+  const locationLabel = selectedFolder?.path ?? "내 드라이브";
 
   function selectDocumentFromRow(documentId: string) {
     if (selectedDocument?.id === documentId) {
@@ -447,76 +510,105 @@ function ArchiveWorkspace({
                 className="flex min-w-0 flex-1 items-center gap-2"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  onRunSearch();
+                  onRunSearch("keyword");
                 }}
               >
-                <Button type="button" variant="ghost" size="icon-sm" aria-label="Toggle folder sidebar" onClick={folderSidebar.toggleSidebar}>
+                <Button type="button" variant="ghost" size="icon-sm" aria-label="폴더 사이드바 열기/닫기" onClick={folderSidebar.toggleSidebar}>
                   <PanelLeft className="size-4" />
                 </Button>
                 <div className="relative min-w-0 flex-1">
                   <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
-                    aria-label="Search documents"
-                    placeholder="Search documents"
+                    aria-label="문서 검색"
+                    placeholder="문서 검색"
                     value={searchQuery}
                     onChange={(event) => onSearchQueryChange(event.target.value)}
                     className="h-10 bg-muted/40 pl-9 shadow-none"
                   />
                 </div>
-                <HeaderTooltip label="Search">
+                <HeaderTooltip label="키워드 검색">
                   <Button
                     type="submit"
                     variant="outline"
-                    size="icon-sm"
-                    className="md:hidden"
-                    aria-label="Search"
+                    size="sm"
+                    className="px-2 md:hidden"
+                    aria-label="키워드 검색"
                     disabled={busy}
                   >
                     {busy ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />}
+                    <span className="sr-only">키워드</span>
                   </Button>
                 </HeaderTooltip>
-                <HeaderTooltip label="Toggle metadata panel">
+                <HeaderTooltip label="의미 검색">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="px-2 md:hidden"
+                    aria-label="의미 검색"
+                    disabled={busy}
+                    onClick={() => onRunSearch("semantic")}
+                  >
+                    {busy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+                    <span className="sr-only">의미</span>
+                  </Button>
+                </HeaderTooltip>
+                <HeaderTooltip label="메타데이터 패널 열기/닫기">
                   <MetadataSidebarTrigger className="md:hidden" />
                 </HeaderTooltip>
                 <div className="hidden md:flex md:gap-2">
-                  <HeaderTooltip label="Search">
+                  <HeaderTooltip label="파일명과 본문에 포함된 단어를 찾습니다">
                     <Button
                       type="submit"
                       variant="outline"
-                      size="icon-sm"
-                      aria-label="Search"
+                      size="sm"
+                      aria-label="키워드 검색"
                       disabled={busy}
                     >
                       {busy ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />}
+                      키워드
+                    </Button>
+                  </HeaderTooltip>
+                  <HeaderTooltip label="임베딩 유사도로 관련 문서를 찾습니다">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      aria-label="의미 검색"
+                      disabled={busy}
+                      onClick={() => onRunSearch("semantic")}
+                    >
+                      {busy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+                      의미
                     </Button>
                   </HeaderTooltip>
                 </div>
               </form>
               <div className="grid grid-cols-2 gap-2 md:flex md:items-center">
-                <HeaderTooltip label="Upload document">
+                <HeaderTooltip label="문서 업로드">
                   <Button
                     variant="outline"
                     size="icon-sm"
                     className="w-full md:w-8"
-                    aria-label="Upload document"
+                    aria-label="문서 업로드"
                     onClick={onUpload}
                     disabled={busy}
                   >
                     <Upload className="size-4" />
                   </Button>
                 </HeaderTooltip>
-                <HeaderTooltip label="New folder">
+                <HeaderTooltip label="새 폴더">
                   <Button
                     size="icon-sm"
                     className="w-full md:w-8"
-                    aria-label="New folder"
+                    aria-label="새 폴더"
                     onClick={onCreateFolder}
                     disabled={busy}
                   >
                     <FolderPlus className="size-4" />
                   </Button>
                 </HeaderTooltip>
-                <HeaderTooltip label="Toggle metadata panel">
+                <HeaderTooltip label="메타데이터 패널 열기/닫기">
                   <MetadataSidebarTrigger className="hidden md:inline-flex" />
                 </HeaderTooltip>
               </div>
@@ -529,13 +621,13 @@ function ArchiveWorkspace({
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                      Archive
+                      아카이브
                       <ChevronRight className="size-3.5" />
                       <span className="truncate">{locationLabel}</span>
                     </div>
                     {searchResults && (
                       <button className="mt-1 text-xs text-primary underline-offset-4 hover:underline" onClick={onClearSearch}>
-                        Showing {searchResults.length} search results. Clear search
+                        {searchMode === "semantic" ? "의미 검색" : "키워드 검색"} 결과 {searchResults.length}개 표시 중. 검색 지우기
                       </button>
                     )}
                   </div>
@@ -552,22 +644,25 @@ function ArchiveWorkspace({
 
                 <div className="overflow-hidden rounded-md border bg-card">
                   <div className="grid grid-cols-[minmax(0,1fr)_96px_36px] gap-3 border-b px-3 py-2 text-xs font-medium uppercase text-muted-foreground md:grid-cols-[minmax(0,1.6fr)_120px_110px_112px_36px]">
-                    <span>Name</span>
-                    <span className="hidden md:block">Modified</span>
-                    <span className="hidden md:block">Size</span>
-                    <span>Status</span>
-                    <span className="sr-only">Actions</span>
+                    <span>이름</span>
+                    <span className="hidden md:block">수정일</span>
+                    <span className="hidden md:block">크기</span>
+                    <span>상태</span>
+                    <span className="sr-only">작업</span>
                   </div>
                   <div className="divide-y">
                     {loading ? (
-                      <div className="p-4 text-sm text-muted-foreground">Loading documents...</div>
+                      <div className="p-4 text-sm text-muted-foreground">문서를 불러오는 중...</div>
                     ) : uniqueRows.length ? (
                       uniqueRows.map((document) => (
-                        <DocumentRow
+                        <DocumentResultRow
                           key={document.id}
                           document={document}
+                          result={searchResultsByDocumentId.get(document.id) ?? null}
+                          searchMode={searchMode}
                           onDelete={() => onDeleteDocument(document)}
-                          onOpen={() => window.open(api.downloadUrl(document.id), "_blank", "noreferrer")}
+                          onGoToFolder={() => onGoToDocumentFolder(document)}
+                          onOpen={() => window.open(api.viewUrl(document.id), "_blank", "noreferrer")}
                           onShowContextMenu={(x, y) => onShowDocumentContextMenu(document, x, y)}
                           selected={selectedDocument?.id === document.id}
                           onSelect={() => selectDocumentFromRow(document.id)}
@@ -575,7 +670,7 @@ function ArchiveWorkspace({
                       ))
                     ) : (
                       <div className="p-4 text-sm text-muted-foreground">
-                        {childFolders.length ? "No documents in this folder." : "No folders or documents in this location."}
+                        {childFolders.length ? "이 폴더에 문서가 없습니다." : "이 위치에 폴더나 문서가 없습니다."}
                       </div>
                     )}
                   </div>
@@ -619,7 +714,7 @@ function FolderContentCard({ folder, onOpen }: { folder: FolderType; onOpen: () 
       </div>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium">{folder.name}</span>
-        <span className="block truncate text-xs text-muted-foreground">{folder.path ?? "Folder"}</span>
+        <span className="block truncate text-xs text-muted-foreground">{folder.path ?? "폴더"}</span>
       </span>
       <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
     </button>
@@ -637,7 +732,7 @@ function FolderFormDialog({
   onClose: () => void;
   onSubmit: (name: string) => void;
 }) {
-  const title = state?.mode === "rename" ? "Rename folder" : "New folder";
+  const title = state?.mode === "rename" ? "폴더 이름 변경" : "새 폴더";
   const initialName = state?.mode === "rename" ? state.folder.name : "";
 
   return (
@@ -646,7 +741,7 @@ function FolderFormDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            {state?.mode === "rename" ? "Update the folder name." : "Create a folder in the selected location."}
+            {state?.mode === "rename" ? "폴더 이름을 수정합니다." : "선택한 위치에 폴더를 만듭니다."}
           </DialogDescription>
         </DialogHeader>
         {state && (
@@ -685,22 +780,22 @@ function FolderFormFields({
       }}
     >
       <div className="space-y-2">
-        <Label htmlFor="folder-name">Folder name</Label>
+        <Label htmlFor="folder-name">폴더 이름</Label>
         <Input
           id="folder-name"
           autoFocus
           value={name}
           onChange={(event) => setName(event.target.value)}
-          placeholder="Folder name"
+          placeholder="폴더 이름"
         />
       </div>
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
-          Cancel
+          취소
         </Button>
         <Button type="submit" disabled={busy || !name.trim()}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
-          Save
+          저장
         </Button>
       </DialogFooter>
     </form>
@@ -718,12 +813,12 @@ function DeleteConfirmDialog({
   onClose: () => void;
   onConfirm: () => void;
 }) {
-  const title = state?.type === "folder" ? "Delete folder" : "Delete document";
+  const title = state?.type === "folder" ? "폴더 삭제" : "문서 삭제";
   const targetName =
     state?.type === "folder"
       ? state.folder.name
       : state?.type === "document"
-        ? state.document.title || state.document.original_filename
+        ? documentDisplayName(state.document)
         : "";
 
   return (
@@ -732,16 +827,16 @@ function DeleteConfirmDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            {state?.type === "folder" ? `Delete ${targetName} and everything inside it.` : `Delete ${targetName}.`}
+            {state?.type === "folder" ? `${targetName} 폴더와 내부 항목을 모두 삭제합니다.` : `${targetName} 문서를 삭제합니다.`}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
-            Cancel
+            취소
           </Button>
           <Button type="button" variant="destructive" onClick={onConfirm} disabled={busy}>
             {busy ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
-            Delete
+            삭제
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -793,7 +888,7 @@ function ArchiveContextMenu({
         <>
           <ContextMenuButton
             icon={FolderPlus}
-            label="New subfolder"
+            label="새 하위 폴더"
             onClick={() => {
               onCreateFolder(state.folder.id);
               onClose();
@@ -801,7 +896,7 @@ function ArchiveContextMenu({
           />
           <ContextMenuButton
             icon={FolderPen}
-            label="Rename"
+            label="이름 변경"
             onClick={() => {
               onRenameFolder(state.folder);
               onClose();
@@ -811,7 +906,7 @@ function ArchiveContextMenu({
           <ContextMenuButton
             destructive
             icon={Trash2}
-            label="Delete folder"
+            label="폴더 삭제"
             onClick={() => {
               onDeleteFolder(state.folder);
               onClose();
@@ -822,9 +917,9 @@ function ArchiveContextMenu({
         <>
           <ContextMenuButton
             icon={MoreHorizontal}
-            label="Open original"
+            label="원본 열기"
             onClick={() => {
-              window.open(api.downloadUrl(state.document.id), "_blank", "noreferrer");
+              window.open(api.viewUrl(state.document.id), "_blank", "noreferrer");
               onClose();
             }}
           />
@@ -832,7 +927,7 @@ function ArchiveContextMenu({
           <ContextMenuButton
             destructive
             icon={Trash2}
-            label="Delete document"
+            label="문서 삭제"
             onClick={() => {
               onDeleteDocument(state.document);
               onClose();
@@ -871,10 +966,119 @@ function ContextMenuButton({
   );
 }
 
+function DocumentResultRow({
+  document,
+  result,
+  searchMode,
+  selected,
+  onDelete,
+  onGoToFolder,
+  onOpen,
+  onSelect,
+  onShowContextMenu,
+}: {
+  document: ArchiveDocument;
+  result: SearchResult | null;
+  searchMode: SearchMode | null;
+  selected: boolean;
+  onDelete: () => void;
+  onGoToFolder: () => void;
+  onOpen: () => void;
+  onSelect: () => void;
+  onShowContextMenu: (x: number, y: number) => void;
+}) {
+  if (searchMode !== "semantic" || !result) {
+    return (
+      <DocumentRow
+        document={document}
+        selected={selected}
+        onDelete={onDelete}
+        onGoToFolder={onGoToFolder}
+        onOpen={onOpen}
+        onSelect={onSelect}
+        onShowContextMenu={onShowContextMenu}
+      />
+    );
+  }
+
+  return (
+    <Collapsible defaultOpen={selected} className={cn("group", selected && "bg-primary/10")}>
+      <div
+        role="button"
+        tabIndex={0}
+        className="grid grid-cols-[minmax(0,1fr)_96px_36px] items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/50 md:grid-cols-[minmax(0,1.6fr)_120px_110px_112px_36px]"
+        onClick={onSelect}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          onShowContextMenu(event.clientX, event.clientY);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onSelect();
+          }
+        }}
+      >
+        <DocumentRowContent document={document} />
+        <span className="hidden text-sm text-muted-foreground md:block">{formatDate(document.updated_at)}</span>
+        <span className="hidden text-sm text-muted-foreground md:block">{formatSize(document.file_size)}</span>
+        <span className="flex items-center gap-2">
+          <Badge variant={document.processing_status === "failed" ? "destructive" : "outline"}>
+            {formatProcessingStatus(document.processing_status)}
+          </Badge>
+          <CollapsibleTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="의미 검색 메타데이터 열기"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <ChevronRight className="size-4 transition-transform group-data-[state=open]:rotate-90" />
+            </Button>
+          </CollapsibleTrigger>
+        </span>
+        <div className="flex items-center justify-end">
+          <DocumentRowMenu
+            onDelete={onDelete}
+            onGoToFolder={onGoToFolder}
+            onOpen={onOpen}
+          />
+        </div>
+      </div>
+      <CollapsibleContent>
+        <button
+          type="button"
+          className="grid w-full gap-3 border-t bg-muted/30 px-4 py-3 text-left md:grid-cols-[160px_minmax(0,1fr)]"
+          onClick={onSelect}
+          onContextMenu={(event) => {
+            event.preventDefault();
+            onShowContextMenu(event.clientX, event.clientY);
+          }}
+        >
+          <div className="space-y-2">
+            <Badge variant="secondary">Semantic</Badge>
+            <div className="text-xs text-muted-foreground">유사도 {formatSimilarityScore(result.score)}</div>
+            <div className="text-xs text-muted-foreground">근거 조각 {shortId(result.chunk_id)}</div>
+          </div>
+          <div className="min-w-0 space-y-2">
+            <div className="text-xs font-medium uppercase text-muted-foreground">RAG Context</div>
+            <p className="line-clamp-3 text-sm leading-6 text-foreground">{result.content}</p>
+            <p className="text-xs text-muted-foreground">
+              이 문서 조각이 질의와 의미적으로 가까워 검색 컨텍스트로 선택되었습니다.
+            </p>
+          </div>
+        </button>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
 function DocumentRow({
   document,
   selected,
   onDelete,
+  onGoToFolder,
   onOpen,
   onSelect,
   onShowContextMenu,
@@ -882,12 +1086,11 @@ function DocumentRow({
   document: ArchiveDocument;
   selected: boolean;
   onDelete: () => void;
+  onGoToFolder: () => void;
   onOpen: () => void;
   onSelect: () => void;
   onShowContextMenu: (x: number, y: number) => void;
 }) {
-  const kind = documentKind(document);
-  const Icon = fileIcon[kind];
   return (
     <div
       role="button"
@@ -908,29 +1111,49 @@ function DocumentRow({
         }
       }}
     >
-      <span className="flex min-w-0 items-center gap-3">
-        <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-md ring-1", fileTone[kind])}>
-          <Icon className="size-4" />
-        </span>
-        <span className="min-w-0">
-          <span className="block truncate text-sm font-medium">{document.title || document.original_filename}</span>
-          <span className="block truncate text-xs text-muted-foreground">{document.original_filename}</span>
-        </span>
-      </span>
+      <DocumentRowContent document={document} />
       <span className="hidden text-sm text-muted-foreground md:block">{formatDate(document.updated_at)}</span>
       <span className="hidden text-sm text-muted-foreground md:block">{formatSize(document.file_size)}</span>
       <span>
-        <Badge variant={document.processing_status === "failed" ? "destructive" : "outline"}>{document.processing_status}</Badge>
+        <Badge variant={document.processing_status === "failed" ? "destructive" : "outline"}>
+          {formatProcessingStatus(document.processing_status)}
+        </Badge>
       </span>
       <DocumentRowMenu
         onDelete={onDelete}
+        onGoToFolder={onGoToFolder}
         onOpen={onOpen}
       />
     </div>
   );
 }
 
-function DocumentRowMenu({ onDelete, onOpen }: { onDelete: () => void; onOpen: () => void }) {
+function DocumentRowContent({ document }: { document: ArchiveDocument }) {
+  const kind = documentKind(document);
+  const Icon = fileIcon[kind];
+
+  return (
+    <span className="flex min-w-0 items-center gap-3">
+      <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-md ring-1", fileTone[kind])}>
+        <Icon className="size-4" />
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-medium">{documentDisplayName(document)}</span>
+        <span className="block truncate text-xs text-muted-foreground">{document.original_filename}</span>
+      </span>
+    </span>
+  );
+}
+
+function DocumentRowMenu({
+  onDelete,
+  onGoToFolder,
+  onOpen,
+}: {
+  onDelete: () => void;
+  onGoToFolder: () => void;
+  onOpen: () => void;
+}) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -938,7 +1161,7 @@ function DocumentRowMenu({ onDelete, onOpen }: { onDelete: () => void; onOpen: (
           type="button"
           variant="ghost"
           size="icon-sm"
-          aria-label="Document actions"
+          aria-label="문서 작업"
           onClick={(event) => event.stopPropagation()}
         >
           <MoreHorizontal className="size-4" />
@@ -952,7 +1175,16 @@ function DocumentRowMenu({ onDelete, onOpen }: { onDelete: () => void; onOpen: (
           }}
         >
           <MoreHorizontal className="size-4" />
-          Open original
+          원본 열기
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={(event) => {
+            event.stopPropagation();
+            onGoToFolder();
+          }}
+        >
+          <FolderOpen className="size-4" />
+          Go to Folder
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
@@ -963,7 +1195,33 @@ function DocumentRowMenu({ onDelete, onOpen }: { onDelete: () => void; onOpen: (
           }}
         >
           <Trash2 className="size-4" />
-          Delete document
+          문서 삭제
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function OriginalFileMenu({ documentId }: { documentId: string }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button type="button" variant="ghost" size="icon-sm" aria-label="원본 파일 작업">
+          <MoreHorizontal className="size-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuItem asChild>
+          <a href={api.downloadUrl(documentId)} target="_blank" rel="noreferrer">
+            <Download className="size-4" />
+            다운로드
+          </a>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <a href={api.viewUrl(documentId)} target="_blank" rel="noreferrer">
+            <Eye className="size-4" />
+            원본 보기
+          </a>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -995,7 +1253,7 @@ function MetadataSidebar({
         const nextLineage = await api.lineage(selected.id);
         if (!ignore) setLineage(nextLineage);
       } catch (error) {
-        if (!ignore) setLineageError(error instanceof Error ? error.message : "Lineage unavailable.");
+        if (!ignore) setLineageError(error instanceof Error ? error.message : "계보 정보를 사용할 수 없습니다.");
       }
     }
     loadLineage();
@@ -1007,14 +1265,14 @@ function MetadataSidebar({
   return (
     <Sidebar side="right" collapsible="offcanvas" mobileWidth="100vw" className="z-30 border-l bg-background text-foreground">
       <SidebarHeader className="h-[49px] shrink-0 flex-row items-center justify-between border-b px-4">
-        <div className="text-sm font-semibold">Document metadata</div>
+        <div className="text-sm font-semibold">문서 메타데이터</div>
         <MetadataSidebarClose />
       </SidebarHeader>
       <SidebarContent className="gap-0 overflow-x-hidden bg-background">
         <ScrollArea className="h-[calc(100vh-49px)] overflow-x-hidden">
           <div className="space-y-6 p-6">
             {!selected ? (
-              <p className="text-sm text-muted-foreground">Select a document to inspect metadata.</p>
+              <p className="text-sm text-muted-foreground">메타데이터를 확인할 문서를 선택하세요.</p>
             ) : (
               <>
                 <div className="flex items-start justify-between gap-3">
@@ -1023,27 +1281,24 @@ function MetadataSidebar({
                       <SelectedIcon className="size-5" />
                     </div>
                     <div className="min-w-0">
-                      <h2 className="truncate text-sm font-semibold">{selected.title || selected.original_filename}</h2>
+                      <h2 className="truncate text-sm font-semibold">{documentDisplayName(selected)}</h2>
                       <p className="truncate text-xs text-muted-foreground">{selected.mime_type}</p>
                     </div>
                   </div>
-                  <Button variant="ghost" size="icon-sm" asChild>
-                    <a href={api.downloadUrl(selected.id)} target="_blank" rel="noreferrer" aria-label="Open original">
-                      <MoreHorizontal className="size-4" />
-                    </a>
-                  </Button>
+                  <OriginalFileMenu documentId={selected.id} />
                 </div>
 
                 <Separator />
 
                 <section className="space-y-3">
-                  <h3 className="text-xs font-semibold uppercase text-muted-foreground">Metadata</h3>
+                  <h3 className="text-xs font-semibold uppercase text-muted-foreground">메타데이터</h3>
                   <dl className="space-y-3 text-sm">
-                    <MetaRow icon={Folder} label="Folder" value={selected.folder_id ? (folder?.path ?? "Unknown") : "My Drive"} />
-                    <MetaRow icon={CalendarDays} label="Created" value={formatDate(selected.created_at)} />
-                    <MetaRow icon={Clock3} label="Modified" value={formatDate(selected.updated_at)} />
-                    <MetaRow icon={Info} label="Type" value={selected.is_generated ? "Generated" : "Uploaded"} />
-                    <MetaRow icon={Tag} label="Tags" value={selected.metadata_row?.tags.join(", ") || "None"} />
+                    <MetaRow icon={Folder} label="폴더" value={selected.folder_id ? (folder?.path ?? "알 수 없음") : "내 드라이브"} />
+                    <MetaRow icon={FileText} label="원본 파일명" value={selected.original_filename} />
+                    <MetaRow icon={CalendarDays} label="생성일" value={formatDate(selected.created_at)} />
+                    <MetaRow icon={Clock3} label="수정일" value={formatDate(selected.updated_at)} />
+                    <MetaRow icon={Info} label="유형" value={selected.is_generated ? "생성됨" : "업로드됨"} />
+                    <MetaRow icon={Tag} label="태그" value={selected.metadata_row?.tags.join(", ") || "없음"} />
                   </dl>
                   {selected.metadata_row?.summary && (
                     <p className="overflow-hidden rounded-md border bg-muted/40 p-3 text-sm leading-6 break-words">
@@ -1062,7 +1317,7 @@ function MetadataSidebar({
                 <section className="space-y-3">
                   <div className="flex items-center gap-2">
                     <Bot className="size-4 text-muted-foreground" />
-                    <h3 className="text-xs font-semibold uppercase text-muted-foreground">AI actions</h3>
+                    <h3 className="text-xs font-semibold uppercase text-muted-foreground">AI 작업</h3>
                   </div>
                   <div className="space-y-2">
                     {(Object.keys(actionLabels) as AIAction[]).map((action) => (
@@ -1078,15 +1333,15 @@ function MetadataSidebar({
                   <>
                     <Separator />
                     <section className="space-y-3">
-                      <h3 className="text-xs font-semibold uppercase text-muted-foreground">Lineage</h3>
+                      <h3 className="text-xs font-semibold uppercase text-muted-foreground">계보</h3>
                       {lineage ? (
                         <dl className="space-y-3 text-sm">
-                          <MetaRow icon={Sparkles} label="Action" value={lineage.operation} />
-                          <MetaRow icon={Bot} label="Model" value={lineage.model_name} />
-                          <MetaRow icon={Info} label="Sources" value={`${lineage.source_document_ids.length}`} />
+                          <MetaRow icon={Sparkles} label="작업" value={formatAction(lineage.operation)} />
+                          <MetaRow icon={Bot} label="모델" value={lineage.model_name} />
+                          <MetaRow icon={Info} label="원본" value={`${lineage.source_document_ids.length}`} />
                         </dl>
                       ) : (
-                        <p className="text-sm text-muted-foreground">{lineageError ?? "Loading lineage..."}</p>
+                        <p className="text-sm text-muted-foreground">{lineageError ?? "계보를 불러오는 중..."}</p>
                       )}
                     </section>
                   </>
@@ -1146,7 +1401,7 @@ function AIActionDialog({
       onGenerated(result.document);
       closeDialog();
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "AI action failed.");
+      setError(submitError instanceof Error ? submitError.message : "AI 작업을 실행하지 못했습니다.");
     } finally {
       setLoading(false);
     }
@@ -1156,12 +1411,12 @@ function AIActionDialog({
     <Dialog open={Boolean(action)} onOpenChange={(open) => !open && closeDialog()}>
       <DialogContent className="max-h-[88vh] overflow-hidden sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>{action ? actionLabels[action] : "AI action"}</DialogTitle>
-          <DialogDescription>Generated output is saved as a new document in the selected folder.</DialogDescription>
+          <DialogTitle>{action ? actionLabels[action] : "AI 작업"}</DialogTitle>
+          <DialogDescription>생성 결과는 선택한 폴더에 새 문서로 저장됩니다.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 overflow-y-auto pr-1">
           <div className="space-y-2">
-            <Label>Reference documents</Label>
+            <Label>참조 문서</Label>
             <div className="max-h-44 space-y-2 overflow-y-auto rounded-md border p-3">
               {documents.map((document) => (
                 <label key={document.id} className="flex items-center gap-2 text-sm">
@@ -1174,24 +1429,24 @@ function AIActionDialog({
                       );
                     }}
                   />
-                  <span className="min-w-0 truncate">{document.title || document.original_filename}</span>
+                  <span className="min-w-0 truncate">{documentDisplayName(document)}</span>
                 </label>
               ))}
             </div>
           </div>
           {action === "rewrite-style" && (
             <div className="space-y-2">
-              <Label htmlFor="style">Style</Label>
-              <Input id="style" value={style} onChange={(event) => setStyle(event.target.value)} placeholder="clear professional" />
+              <Label htmlFor="style">문체</Label>
+              <Input id="style" value={style} onChange={(event) => setStyle(event.target.value)} placeholder="명확하고 전문적인 문체" />
             </div>
           )}
           <div className="space-y-2">
-            <Label htmlFor="instructions">Additional instructions</Label>
+            <Label htmlFor="instructions">추가 지시사항</Label>
             <Textarea
               id="instructions"
               value={instructions}
               onChange={(event) => setInstructions(event.target.value)}
-              placeholder="Add constraints, focus areas, or desired structure"
+              placeholder="제약 조건, 중점 영역, 원하는 구조를 입력하세요"
               className="min-h-28"
             />
           </div>
@@ -1199,11 +1454,11 @@ function AIActionDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={closeDialog} disabled={loading}>
-            Cancel
+            취소
           </Button>
           <Button onClick={submit} disabled={loading || !selectedFolderId || !selectedRefs.length}>
             {loading ? <Loader2 className="size-4 animate-spin" /> : <Check className="size-4" />}
-            Run
+            실행
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1237,16 +1492,16 @@ function ArchiveSidebar({
       <SidebarHeader className="mt-1 h-[49px] shrink-0 justify-center">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" tooltip="Document Archive" className="h-12 pr-9 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-0">
+            <SidebarMenuButton size="lg" tooltip="문서 아카이브" className="h-12 pr-9 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:p-0">
               <div className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
                 <Archive className="size-4" />
               </div>
               <span className="min-w-0 group-data-[collapsible=icon]:hidden">
-                <span className="block truncate font-semibold">Document Archive</span>
+                <span className="block truncate font-semibold">문서 아카이브</span>
                 <span className="block truncate text-xs text-sidebar-foreground/60">PostgreSQL + pgvector</span>
               </span>
             </SidebarMenuButton>
-            <SidebarMenuAction aria-label="Create folder" onClick={() => onCreateFolder(selectedFolderId)}>
+            <SidebarMenuAction aria-label="폴더 만들기" onClick={() => onCreateFolder(selectedFolderId)}>
               <Plus />
             </SidebarMenuAction>
           </SidebarMenuItem>
@@ -1255,13 +1510,13 @@ function ArchiveSidebar({
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Folders</SidebarGroupLabel>
+          <SidebarGroupLabel>폴더</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="gap-0.5">
               <SidebarMenuItem>
-                <SidebarMenuButton isActive={!selectedFolderId} size="sm" tooltip="My Drive" className="h-7 text-xs" onClick={() => onSelectFolder(null)}>
+                <SidebarMenuButton isActive={!selectedFolderId} size="sm" tooltip="내 드라이브" className="h-7 text-xs" onClick={() => onSelectFolder(null)}>
                   <HardDrive className="size-3.5" />
-                  <span>My Drive</span>
+                  <span>내 드라이브</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               {tree.map((node) => (
@@ -1286,11 +1541,11 @@ function ArchiveSidebar({
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton tooltip="Upload" className="h-auto py-2" onClick={onUpload}>
+            <SidebarMenuButton tooltip="업로드" className="h-auto py-2" onClick={onUpload}>
               <Upload className="size-4" />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium">Upload</span>
-                <span className="block truncate text-xs text-sidebar-foreground/60">Images, PDFs, text</span>
+                <span className="block truncate text-sm font-medium">업로드</span>
+                <span className="block truncate text-xs text-sidebar-foreground/60">이미지, PDF, 텍스트</span>
               </span>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -1384,23 +1639,23 @@ function FolderRowMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <SidebarMenuAction aria-label={`${folder.name} actions`} onClick={(event) => event.stopPropagation()}>
+        <SidebarMenuAction aria-label={`${folder.name} 작업`} onClick={(event) => event.stopPropagation()}>
           <MoreHorizontal />
         </SidebarMenuAction>
       </DropdownMenuTrigger>
       <DropdownMenuContent side={isMobile ? "bottom" : "right"} align={isMobile ? "end" : "start"} className="w-44">
         <DropdownMenuItem onClick={onCreateFolder}>
           <FolderPlus className="size-4" />
-          New subfolder
+          새 하위 폴더
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onRenameFolder}>
           <FolderPen className="size-4" />
-          Rename
+          이름 변경
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onClick={onDeleteFolder}>
           <Trash2 className="size-4" />
-          Delete folder
+          폴더 삭제
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -1410,7 +1665,7 @@ function FolderRowMenu({
 function MetadataSidebarTrigger({ className }: { className?: string }) {
   const { toggleSidebar } = useSidebar();
   return (
-    <Button type="button" variant="ghost" size="icon-sm" className={className} aria-label="Toggle metadata sidebar" onClick={toggleSidebar}>
+    <Button type="button" variant="ghost" size="icon-sm" className={className} aria-label="메타데이터 사이드바 열기/닫기" onClick={toggleSidebar}>
       <PanelRight className="size-4" />
     </Button>
   );
@@ -1423,7 +1678,7 @@ function MetadataSidebarClose() {
       type="button"
       variant="ghost"
       size="icon-sm"
-      aria-label="Close metadata sidebar"
+      aria-label="메타데이터 사이드바 닫기"
       onClick={() => {
         if (isMobile) setOpenMobile(false);
         else setOpen(false);
@@ -1457,29 +1712,56 @@ function formatSize(bytes: number) {
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+  return new Intl.DateTimeFormat("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }
 
-function mergeSearchResults(keywordResults: SearchResult[], semanticResults: SearchResult[]) {
-  const merged = new Map<string, SearchResult>();
+function formatElapsedSeconds(seconds: number) {
+  return Math.max(0.1, seconds).toFixed(1);
+}
 
-  for (const result of keywordResults) {
-    merged.set(result.document_id, { ...result, score: result.score ?? 1 });
+function documentDisplayName(document: ArchiveDocument) {
+  return document.corrected_filename || document.title || document.original_filename;
+}
+
+function formatSimilarityScore(score: number | null) {
+  if (score === null) return "사용 불가";
+  return `${Math.round(score * 100)}%`;
+}
+
+function shortId(id: string) {
+  return id.slice(0, 8);
+}
+
+function formatAction(action: string) {
+  return actionLabels[action as AIAction] ?? action;
+}
+
+function formatProcessingStatus(status: string) {
+  const labels: Record<string, string> = {
+    pending: "대기 중",
+    processing: "처리 중",
+    completed: "완료",
+    failed: "실패",
+    ready: "준비됨",
+  };
+
+  return labels[status] ?? status;
+}
+
+function searchResultsByDocument(results: SearchResult[] | null) {
+  const byDocumentId = new Map<string, SearchResult>();
+  for (const result of results ?? []) {
+    if (!byDocumentId.has(result.document_id)) byDocumentId.set(result.document_id, result);
   }
+  return byDocumentId;
+}
 
-  for (const result of semanticResults) {
-    const existing = merged.get(result.document_id);
-    if (!existing) {
-      merged.set(result.document_id, result);
-      continue;
-    }
-    merged.set(result.document_id, {
-      ...existing,
-      score: Math.max(existing.score ?? 0, result.score ?? 0),
-    });
-  }
+function isDocument(document: ArchiveDocument | undefined): document is ArchiveDocument {
+  return Boolean(document);
+}
 
-  return Array.from(merged.values()).sort((left, right) => (right.score ?? 0) - (left.score ?? 0));
+function uniqueDocuments(documents: ArchiveDocument[]) {
+  return Array.from(new Map(documents.map((document) => [document.id, document])).values());
 }
 
 function buildFolderTree(folders: FolderType[]) {

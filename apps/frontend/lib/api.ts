@@ -29,6 +29,7 @@ export type ArchiveDocument = {
   id: string;
   folder_id: string | null;
   title: string | null;
+  corrected_filename: string | null;
   original_filename: string;
   mime_type: string;
   file_size: number;
@@ -48,6 +49,7 @@ export type SearchResult = {
   chunk_id: string;
   document_id: string;
   title: string | null;
+  corrected_filename: string | null;
   content: string;
   score: number | null;
 };
@@ -76,7 +78,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(body.detail ?? `Request failed: ${response.status}`);
+    throw new Error(body.detail ?? `요청 실패: ${response.status}`);
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
@@ -102,6 +104,7 @@ export const api = {
     const query = folderId ? `?folder_id=${folderId}` : "?root_only=true";
     return request<ArchiveDocument[]>(`/documents${query}`);
   },
+  document: (documentId: string) => request<ArchiveDocument>(`/documents/${documentId}`),
   deleteDocument: (documentId: string) =>
     request<void>(`/documents/${documentId}`, {
       method: "DELETE",
@@ -118,12 +121,12 @@ export const api = {
   keywordSearch: (query: string, folderId?: string | null) =>
     request<SearchResult[]>("/search/keyword", {
       method: "POST",
-      body: JSON.stringify({ query, folder_id: folderId, root_only: !folderId, limit: 25 }),
+      body: JSON.stringify({ query, folder_id: folderId, root_only: false, limit: 25 }),
     }),
   semanticSearch: (query: string, folderId?: string | null) =>
     request<SearchResult[]>("/search/semantic", {
       method: "POST",
-      body: JSON.stringify({ query, folder_id: folderId, root_only: !folderId, limit: 25 }),
+      body: JSON.stringify({ query, folder_id: folderId, root_only: false, limit: 25 }),
     }),
   runAction: (
     action: "summarize" | "draft" | "report" | "rewrite-style" | "merge-documents",
@@ -140,4 +143,5 @@ export const api = {
     }),
   lineage: (documentId: string) => request<Lineage>(`/ai-actions/${documentId}/lineage`),
   downloadUrl: (documentId: string) => `${API_V1}/documents/${documentId}/download`,
+  viewUrl: (documentId: string) => `${API_V1}/documents/${documentId}/view`,
 };

@@ -54,17 +54,22 @@ def get_settings() -> Settings:
     if not database_url:
         raise RuntimeError("DATABASE_URL is not configured. Define it in @db_config.md or the environment.")
 
+    minio_endpoint = _env_or_config("MINIO_ENDPOINT", config_values)
+    minio_access_key = _env_or_config("MINIO_ACCESS_KEY", config_values)
+    minio_secret_key = _env_or_config("MINIO_SECRET_KEY", config_values)
+    minio_bucket = _env_or_config("MINIO_BUCKET", config_values)
+    default_storage_backend = "minio" if all([minio_endpoint, minio_access_key, minio_secret_key, minio_bucket]) else "local"
     local_storage_dir = Path(
         os.environ.get("LOCAL_STORAGE_DIR", str(BACKEND_DIR / ".data" / "uploads"))
     )
     return Settings(
         database_url=database_url,
-        storage_backend=os.environ.get("OBJECT_STORAGE_BACKEND", "local").lower(),
+        storage_backend=os.environ.get("OBJECT_STORAGE_BACKEND", default_storage_backend).lower(),
         local_storage_dir=local_storage_dir,
-        minio_endpoint=_env_or_config("MINIO_ENDPOINT", config_values),
-        minio_access_key=_env_or_config("MINIO_ACCESS_KEY", config_values),
-        minio_secret_key=_env_or_config("MINIO_SECRET_KEY", config_values),
-        minio_bucket=_env_or_config("MINIO_BUCKET", config_values),
+        minio_endpoint=minio_endpoint,
+        minio_access_key=minio_access_key,
+        minio_secret_key=minio_secret_key,
+        minio_bucket=minio_bucket,
         ai_provider_config_path=AI_PROVIDER_CONFIG_PATH,
         embedding_dimension=int(os.environ.get("LOCAL_AI_EMBEDDING_DIMENSION", "1024")),
     )

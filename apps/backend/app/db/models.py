@@ -60,6 +60,7 @@ class Document(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     folder_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("folders.id"), nullable=True)
     title: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    corrected_filename: Mapped[str | None] = mapped_column(String(512), nullable=True)
     original_filename: Mapped[str] = mapped_column(String(512), nullable=False)
     mime_type: Mapped[str] = mapped_column(String(255), nullable=False)
     file_size: Mapped[int] = mapped_column(BigInteger, nullable=False)

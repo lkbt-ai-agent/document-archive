@@ -18,8 +18,10 @@ class DocumentService:
     def create_uploaded_document(self, folder_id: uuid.UUID | None, filename: str, mime_type: str, content: bytes) -> Document:
         if folder_id and not self.db.get(Folder, folder_id):
             raise ValueError("Folder not found.")
-        storage_bucket, storage_key = StorageService().save(filename, content, mime_type)
+        document_id = uuid.uuid4()
+        storage_bucket, storage_key = StorageService().save(filename, content, mime_type, category="originals", document_id=document_id)
         document = Document(
+            id=document_id,
             folder_id=folder_id,
             original_filename=filename,
             mime_type=mime_type,
@@ -45,10 +47,13 @@ class DocumentService:
         operation: str,
     ) -> Document:
         content = content_text.encode("utf-8")
-        storage_bucket, storage_key = StorageService().save(f"{title}.md", content, "text/markdown")
+        document_id = uuid.uuid4()
+        storage_bucket, storage_key = StorageService().save(f"{title}.md", content, "text/markdown", category="generated", document_id=document_id)
         document = Document(
+            id=document_id,
             folder_id=folder_id,
             title=title,
+            corrected_filename=f"{title}.md",
             original_filename=f"{title}.md",
             mime_type="text/markdown",
             file_size=len(content),
@@ -79,6 +84,7 @@ class DocumentService:
         embedding = get_embedding_provider()
         metadata = generation.generate_metadata(text)
         document.title = metadata.title
+        document.corrected_filename = metadata.title
         self.db.add(
             DocumentMetadata(
                 document_id=document.id,
