@@ -11,6 +11,8 @@ import httpx
 from app.ai.providers import AIProviderRuntimeError, EmbeddingProvider, GeneratedMetadata, OCRProvider, TextGenerationProvider
 from app.core.config import get_settings
 
+METADATA_TEXT_CHAR_LIMIT = 3500
+
 
 def _load_provider_config() -> dict[str, Any]:
     path = get_settings().ai_provider_config_path
@@ -58,10 +60,13 @@ class _LlamaProviderBase:
         try:
             with httpx.Client(timeout=180) as client:
                 response = client.post(url, json=payload)
-                response.raise_for_status()
+                if response.is_error:
+                    detail = response.text[:500].strip()
+                    response.raise_for_status()
                 return response.json()
         except httpx.HTTPError as exc:
-            raise AIProviderRuntimeError(f"{self.role} provider request failed at {url}: {exc}") from exc
+            suffix = f" Response body: {detail}" if "detail" in locals() and detail else ""
+            raise AIProviderRuntimeError(f"{self.role} provider request failed at {url}: {exc}{suffix}") from exc
 
 
 class LlamaCppOCRProvider(_LlamaProviderBase, OCRProvider):
@@ -102,7 +107,13 @@ class LlamaCppTextGenerationProvider(_LlamaProviderBase, TextGenerationProvider)
     def __init__(self) -> None:
         super().__init__("generation")
 
-    def complete(self, system_prompt: str, user_prompt: str, temperature: float = 0.2) -> str:
+    def complete(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: float = 0.2,
+        max_tokens: int | None = None,
+    ) -> str:
         payload = {
             "model": self.model_name,
             "messages": [
@@ -112,6 +123,8 @@ class LlamaCppTextGenerationProvider(_LlamaProviderBase, TextGenerationProvider)
             "temperature": temperature,
             "chat_template_kwargs": {"enable_thinking": False},
         }
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
         data = self._post(payload)
         return data["choices"][0]["message"]["content"].strip()
 
@@ -120,9 +133,9 @@ class LlamaCppTextGenerationProvider(_LlamaProviderBase, TextGenerationProvider)
         user = (
             "Create metadata for this document. Return JSON only with keys: "
             "title, summary, tags, language, document_type. "
-            f"Document text:\n{text[:6000]}"
+            f"Document text:\n{text[:METADATA_TEXT_CHAR_LIMIT]}"
         )
-        raw = self.complete(system, user, temperature=0.1)
+        raw = self.complete(system, user, temperature=0.1, max_tokens=512)
         try:
             payload = json.loads(raw.strip().removeprefix("```json").removesuffix("```").strip())
         except json.JSONDecodeError as exc:

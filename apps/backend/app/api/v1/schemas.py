@@ -46,7 +46,7 @@ class DocumentRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    folder_id: uuid.UUID
+    folder_id: uuid.UUID | None
     title: str | None
     original_filename: str
     mime_type: str
@@ -76,12 +76,14 @@ class DocumentChunkRead(BaseModel):
 class KeywordSearchRequest(BaseModel):
     query: str = Field(min_length=1)
     folder_id: uuid.UUID | None = None
+    root_only: bool = False
     limit: int = Field(default=20, ge=1, le=100)
 
 
 class SemanticSearchRequest(BaseModel):
     query: str = Field(min_length=1)
     folder_id: uuid.UUID | None = None
+    root_only: bool = False
     limit: int = Field(default=10, ge=1, le=50)
 
 

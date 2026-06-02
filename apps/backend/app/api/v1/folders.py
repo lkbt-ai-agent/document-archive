@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.v1.schemas import FolderCreate, FolderRead, FolderUpdate
 from app.core.database import get_db
-from app.db.models import Document, Folder
+from app.db.models import Folder
 
 
 router = APIRouter(prefix="/folders", tags=["folders"])
@@ -54,8 +54,4 @@ def delete_folder(folder_id: uuid.UUID, db: Session = Depends(get_db)) -> None:
     folder = db.get(Folder, folder_id)
     if not folder:
         raise HTTPException(status_code=404, detail="Folder not found.")
-    has_children = db.scalar(select(Folder.id).where(Folder.parent_id == folder_id).limit(1))
-    has_documents = db.scalar(select(Document.id).where(Document.folder_id == folder_id).limit(1))
-    if has_children or has_documents:
-        raise HTTPException(status_code=409, detail="Folder is not empty.")
     db.delete(folder)

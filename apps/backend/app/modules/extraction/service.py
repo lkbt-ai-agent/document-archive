@@ -28,7 +28,7 @@ class TextExtractionService:
         raise ValueError("Unsupported file type. Supported types: jpg, png, webp, PDF, txt, md.")
 
 
-def chunk_text(text: str, chunk_size: int = 1200, overlap: int = 160) -> list[str]:
+def chunk_text(text: str, chunk_size: int = 800, overlap: int = 160) -> list[str]:
     normalized = "\n".join(line.rstrip() for line in text.splitlines()).strip()
     if not normalized:
         return []

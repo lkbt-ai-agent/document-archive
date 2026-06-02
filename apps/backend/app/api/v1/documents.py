@@ -22,8 +22,8 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 
 @router.post("/upload", response_model=DocumentRead, status_code=status.HTTP_201_CREATED)
 async def upload_document(
-    folder_id: uuid.UUID = Form(...),
     file: UploadFile = File(...),
+    folder_id: uuid.UUID | None = Form(default=None),
     db: Session = Depends(get_db),
 ) -> Document:
     ext = Path(file.filename or "").suffix.lower()
@@ -42,9 +42,15 @@ async def upload_document(
 
 
 @router.get("", response_model=list[DocumentRead])
-def list_documents(folder_id: uuid.UUID | None = None, db: Session = Depends(get_db)) -> list[Document]:
+def list_documents(
+    folder_id: uuid.UUID | None = None,
+    root_only: bool = False,
+    db: Session = Depends(get_db),
+) -> list[Document]:
     stmt = select(Document).options(selectinload(Document.metadata_row)).order_by(Document.created_at.desc())
-    if folder_id:
+    if root_only:
+        stmt = stmt.where(Document.folder_id.is_(None))
+    elif folder_id:
         stmt = stmt.where(Document.folder_id == folder_id)
     return list(db.scalars(stmt))
 

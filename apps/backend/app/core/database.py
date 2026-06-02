@@ -18,6 +18,9 @@ def init_db() -> None:
     with engine.begin() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
     Base.metadata.create_all(bind=engine)
+    if engine.dialect.name == "postgresql":
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE documents ALTER COLUMN folder_id DROP NOT NULL"))
 
 
 def get_db() -> Generator[Session]:

@@ -138,9 +138,6 @@ export function ArchiveShell() {
     const [nextFolders, nextDocuments] = await Promise.all([api.folders(), api.documents(folderId)]);
     setFolders(nextFolders);
     setDocuments(nextDocuments);
-    if (!folderId && !selectedFolderId && nextFolders[0]) {
-      setSelectedFolderId(nextFolders[0].id);
-    }
     if (preferredDocumentId && nextDocuments.some((item) => item.id === preferredDocumentId)) {
       setSelectedDocumentId(preferredDocumentId);
       return;
@@ -158,12 +155,10 @@ export function ArchiveShell() {
     async function load() {
       try {
         setLoading(true);
-        const nextFolders = await api.folders();
-        const folderId = nextFolders[0]?.id ?? null;
-        const nextDocuments = await api.documents(folderId);
+        const [nextFolders, nextDocuments] = await Promise.all([api.folders(), api.documents(null)]);
         if (!ignore) {
           setFolders(nextFolders);
-          setSelectedFolderId(folderId);
+          setSelectedFolderId(null);
           setDocuments(nextDocuments);
           setSelectedDocumentId(nextDocuments[0]?.id ?? null);
         }
@@ -226,7 +221,8 @@ export function ArchiveShell() {
       setError(null);
       if (deleteDialog.type === "folder") {
         await api.deleteFolder(deleteDialog.folder.id);
-        const nextFolderId = selectedFolderId === deleteDialog.folder.id ? null : selectedFolderId;
+        const nextFolderId =
+          selectedFolderId && isFolderOrDescendant(selectedFolderId, deleteDialog.folder, folders) ? null : selectedFolderId;
         setSelectedFolderId(nextFolderId);
         await refresh(nextFolderId);
         setFolders((current) => current.filter((folder) => folder.id !== deleteDialog.folder.id));
@@ -246,7 +242,7 @@ export function ArchiveShell() {
   }
 
   async function uploadFile(file: File | null | undefined) {
-    if (!file || !selectedFolderId) return;
+    if (!file) return;
     try {
       setBusy(true);
       setError(null);
@@ -327,6 +323,7 @@ export function ArchiveShell() {
         onRunSearch={runSearch}
         onSearchQueryChange={setSearchQuery}
         onSelectDocument={setSelectedDocumentId}
+        onSelectFolder={selectFolder}
         onShowDocumentContextMenu={(document, x, y) => setContextMenu({ type: "document", document, x, y })}
         onUpload={() => fileInputRef.current?.click()}
       />
@@ -386,6 +383,7 @@ function ArchiveWorkspace({
   onRunSearch,
   onSearchQueryChange,
   onSelectDocument,
+  onSelectFolder,
   onShowDocumentContextMenu,
   onUpload,
 }: {
@@ -405,16 +403,23 @@ function ArchiveWorkspace({
   onRunSearch: () => void;
   onSearchQueryChange: (query: string) => void;
   onSelectDocument: (documentId: string) => void;
+  onSelectFolder: (folderId: string | null) => void;
   onShowDocumentContextMenu: (document: ArchiveDocument, x: number, y: number) => void;
   onUpload: () => void;
 }) {
   const folderSidebar = useSidebar();
-  const [metadataOpen, setMetadataOpen] = useState(true);
+  const [metadataOpen, setMetadataOpen] = useState(false);
   const selectedFolder = folders.find((folder) => folder.id === selectedFolderId) ?? null;
   const rows = searchResults
     ? searchResults.map((result) => documents.find((document) => document.id === result.document_id)).filter(Boolean)
     : documents;
   const uniqueRows = Array.from(new Map(rows.map((document) => [document!.id, document!])).values());
+  const childFolders = searchResults
+    ? []
+    : folders
+        .filter((folder) => folder.parent_id === selectedFolderId)
+        .sort((left, right) => left.name.localeCompare(right.name));
+  const locationLabel = selectedFolder?.path ?? "My Drive";
 
   function selectDocumentFromRow(documentId: string) {
     if (selectedDocument?.id === documentId) {
@@ -436,17 +441,18 @@ function ArchiveWorkspace({
       >
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
-            <div className="flex min-h-16 flex-col gap-3 px-4 py-3 md:min-h-12 md:flex-row md:items-center md:py-0">
-              <Button type="button" variant="ghost" size="icon-sm" aria-label="Toggle folder sidebar" onClick={folderSidebar.toggleSidebar}>
-                <PanelLeft className="size-4" />
-              </Button>
+            <div className="flex min-h-16 flex-col gap-2 px-4 py-3 md:min-h-12 md:flex-row md:items-center md:gap-3 md:py-0">
               <form
-                className="flex min-w-0 flex-1 flex-col gap-2 md:flex-row md:items-center"
+                id="archive-search-form"
+                className="flex min-w-0 flex-1 items-center gap-2"
                 onSubmit={(event) => {
                   event.preventDefault();
                   onRunSearch();
                 }}
               >
+                <Button type="button" variant="ghost" size="icon-sm" aria-label="Toggle folder sidebar" onClick={folderSidebar.toggleSidebar}>
+                  <PanelLeft className="size-4" />
+                </Button>
                 <div className="relative min-w-0 flex-1">
                   <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
@@ -457,7 +463,22 @@ function ArchiveWorkspace({
                     className="h-10 bg-muted/40 pl-9 shadow-none"
                   />
                 </div>
-                <div className="flex gap-2">
+                <HeaderTooltip label="Search">
+                  <Button
+                    type="submit"
+                    variant="outline"
+                    size="icon-sm"
+                    className="md:hidden"
+                    aria-label="Search"
+                    disabled={busy}
+                  >
+                    {busy ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />}
+                  </Button>
+                </HeaderTooltip>
+                <HeaderTooltip label="Toggle metadata panel">
+                  <MetadataSidebarTrigger className="md:hidden" />
+                </HeaderTooltip>
+                <div className="hidden md:flex md:gap-2">
                   <HeaderTooltip label="Search">
                     <Button
                       type="submit"
@@ -471,14 +492,15 @@ function ArchiveWorkspace({
                   </HeaderTooltip>
                 </div>
               </form>
-              <div className="flex items-center gap-2">
+              <div className="grid grid-cols-2 gap-2 md:flex md:items-center">
                 <HeaderTooltip label="Upload document">
                   <Button
                     variant="outline"
                     size="icon-sm"
+                    className="w-full md:w-8"
                     aria-label="Upload document"
                     onClick={onUpload}
-                    disabled={!selectedFolderId || busy}
+                    disabled={busy}
                   >
                     <Upload className="size-4" />
                   </Button>
@@ -486,6 +508,7 @@ function ArchiveWorkspace({
                 <HeaderTooltip label="New folder">
                   <Button
                     size="icon-sm"
+                    className="w-full md:w-8"
                     aria-label="New folder"
                     onClick={onCreateFolder}
                     disabled={busy}
@@ -494,7 +517,7 @@ function ArchiveWorkspace({
                   </Button>
                 </HeaderTooltip>
                 <HeaderTooltip label="Toggle metadata panel">
-                  <MetadataSidebarTrigger />
+                  <MetadataSidebarTrigger className="hidden md:inline-flex" />
                 </HeaderTooltip>
               </div>
             </div>
@@ -508,7 +531,7 @@ function ArchiveWorkspace({
                     <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                       Archive
                       <ChevronRight className="size-3.5" />
-                      <span className="truncate">{selectedFolder?.path ?? "All folders"}</span>
+                      <span className="truncate">{locationLabel}</span>
                     </div>
                     {searchResults && (
                       <button className="mt-1 text-xs text-primary underline-offset-4 hover:underline" onClick={onClearSearch}>
@@ -518,6 +541,14 @@ function ArchiveWorkspace({
                   </div>
                   {error && <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>}
                 </div>
+
+                {childFolders.length > 0 && (
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {childFolders.map((folder) => (
+                      <FolderContentCard key={folder.id} folder={folder} onOpen={() => onSelectFolder(folder.id)} />
+                    ))}
+                  </div>
+                )}
 
                 <div className="overflow-hidden rounded-md border bg-card">
                   <div className="grid grid-cols-[minmax(0,1fr)_96px_36px] gap-3 border-b px-3 py-2 text-xs font-medium uppercase text-muted-foreground md:grid-cols-[minmax(0,1.6fr)_120px_110px_112px_36px]">
@@ -543,7 +574,9 @@ function ArchiveWorkspace({
                         />
                       ))
                     ) : (
-                      <div className="p-4 text-sm text-muted-foreground">No documents in this folder.</div>
+                      <div className="p-4 text-sm text-muted-foreground">
+                        {childFolders.length ? "No documents in this folder." : "No folders or documents in this location."}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -571,6 +604,25 @@ function HeaderTooltip({
         {label}
       </TooltipContent>
     </Tooltip>
+  );
+}
+
+function FolderContentCard({ folder, onOpen }: { folder: FolderType; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      className="flex min-w-0 items-center gap-3 rounded-md border bg-card px-3 py-3 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      onClick={onOpen}
+    >
+      <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-amber-50 text-amber-700 ring-1 ring-amber-200">
+        <Folder className="size-4" />
+      </div>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium">{folder.name}</span>
+        <span className="block truncate text-xs text-muted-foreground">{folder.path ?? "Folder"}</span>
+      </span>
+      <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+    </button>
   );
 }
 
@@ -680,7 +732,7 @@ function DeleteConfirmDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            Delete {targetName}. Non-empty folders can only be deleted after their documents and subfolders are removed.
+            {state?.type === "folder" ? `Delete ${targetName} and everything inside it.` : `Delete ${targetName}.`}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -953,7 +1005,7 @@ function MetadataSidebar({
   }, [selected?.id, selected?.is_generated]);
 
   return (
-    <Sidebar side="right" collapsible="offcanvas" className="z-30 border-l bg-background text-foreground">
+    <Sidebar side="right" collapsible="offcanvas" mobileWidth="100vw" className="z-30 border-l bg-background text-foreground">
       <SidebarHeader className="h-[49px] shrink-0 flex-row items-center justify-between border-b px-4">
         <div className="text-sm font-semibold">Document metadata</div>
         <MetadataSidebarClose />
@@ -987,7 +1039,7 @@ function MetadataSidebar({
                 <section className="space-y-3">
                   <h3 className="text-xs font-semibold uppercase text-muted-foreground">Metadata</h3>
                   <dl className="space-y-3 text-sm">
-                    <MetaRow icon={Folder} label="Folder" value={folder?.path ?? "Unknown"} />
+                    <MetaRow icon={Folder} label="Folder" value={selected.folder_id ? (folder?.path ?? "Unknown") : "My Drive"} />
                     <MetaRow icon={CalendarDays} label="Created" value={formatDate(selected.created_at)} />
                     <MetaRow icon={Clock3} label="Modified" value={formatDate(selected.updated_at)} />
                     <MetaRow icon={Info} label="Type" value={selected.is_generated ? "Generated" : "Uploaded"} />
@@ -1207,9 +1259,9 @@ function ArchiveSidebar({
           <SidebarGroupContent>
             <SidebarMenu className="gap-0.5">
               <SidebarMenuItem>
-                <SidebarMenuButton isActive={!selectedFolderId} size="sm" tooltip="All folders" className="h-7 text-xs" onClick={() => onSelectFolder(null)}>
+                <SidebarMenuButton isActive={!selectedFolderId} size="sm" tooltip="My Drive" className="h-7 text-xs" onClick={() => onSelectFolder(null)}>
                   <HardDrive className="size-3.5" />
-                  <span>All folders</span>
+                  <span>My Drive</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               {tree.map((node) => (
@@ -1454,6 +1506,20 @@ function buildFolderTree(folders: FolderType[]) {
 
   sortAndMark(roots, 0);
   return roots;
+}
+
+function isFolderOrDescendant(folderId: string, deletedFolder: FolderType, folders: FolderType[]) {
+  if (folderId === deletedFolder.id) return true;
+
+  const foldersById = new Map(folders.map((folder) => [folder.id, folder]));
+  let folder = foldersById.get(folderId);
+
+  while (folder?.parent_id) {
+    if (folder.parent_id === deletedFolder.id) return true;
+    folder = foldersById.get(folder.parent_id);
+  }
+
+  return false;
 }
 
 function mergeFolderIntoList(folders: FolderType[], folder: FolderType) {

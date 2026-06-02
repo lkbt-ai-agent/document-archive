@@ -23,7 +23,9 @@ def keyword_search(payload: KeywordSearchRequest, db: Session = Depends(get_db))
         .where(DocumentChunk.content.ilike(f"%{payload.query}%"))
         .limit(payload.limit)
     )
-    if payload.folder_id:
+    if payload.root_only:
+        stmt = stmt.where(Document.folder_id.is_(None))
+    elif payload.folder_id:
         stmt = stmt.where(Document.folder_id == payload.folder_id)
     return [
         SearchResult(chunk_id=chunk.id, document_id=document.id, title=document.title, content=chunk.content, score=None)
@@ -46,7 +48,9 @@ def semantic_search(payload: SemanticSearchRequest, db: Session = Depends(get_db
         .order_by(distance)
         .limit(payload.limit)
     )
-    if payload.folder_id:
+    if payload.root_only:
+        stmt = stmt.where(Document.folder_id.is_(None))
+    elif payload.folder_id:
         stmt = stmt.where(Document.folder_id == payload.folder_id)
     results: list[SearchResult] = []
     for chunk, document, dist in db.execute(stmt).all():

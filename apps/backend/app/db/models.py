@@ -49,15 +49,16 @@ class Folder(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc, nullable=False)
 
-    parent: Mapped["Folder | None"] = relationship(remote_side=[id])
-    documents: Mapped[list["Document"]] = relationship(back_populates="folder")
+    parent: Mapped["Folder | None"] = relationship(remote_side=[id], back_populates="children")
+    children: Mapped[list["Folder"]] = relationship(back_populates="parent", cascade="all, delete-orphan")
+    documents: Mapped[list["Document"]] = relationship(back_populates="folder", cascade="all, delete-orphan")
 
 
 class Document(Base):
     __tablename__ = "documents"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    folder_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("folders.id"), nullable=False)
+    folder_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("folders.id"), nullable=True)
     title: Mapped[str | None] = mapped_column(String(512), nullable=True)
     original_filename: Mapped[str] = mapped_column(String(512), nullable=False)
     mime_type: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -72,9 +73,13 @@ class Document(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, onupdate=now_utc, nullable=False)
 
-    folder: Mapped[Folder] = relationship(back_populates="documents")
+    folder: Mapped[Folder | None] = relationship(back_populates="documents")
     metadata_row: Mapped["DocumentMetadata | None"] = relationship(back_populates="document", cascade="all, delete-orphan")
     chunks: Mapped[list["DocumentChunk"]] = relationship(back_populates="document", cascade="all, delete-orphan")
+    generated_lineage: Mapped["GeneratedDocumentLineage | None"] = relationship(
+        back_populates="generated_document",
+        cascade="all, delete-orphan",
+    )
 
 
 class DocumentMetadata(Base):
@@ -128,3 +133,5 @@ class GeneratedDocumentLineage(Base):
     generation_params: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     workflow_dna: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now_utc, nullable=False)
+
+    generated_document: Mapped[Document] = relationship(back_populates="generated_lineage")

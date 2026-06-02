@@ -27,7 +27,7 @@ export type DocumentMetadata = {
 
 export type ArchiveDocument = {
   id: string;
-  folder_id: string;
+  folder_id: string | null;
   title: string | null;
   original_filename: string;
   mime_type: string;
@@ -99,16 +99,16 @@ export const api = {
       method: "DELETE",
     }),
   documents: (folderId?: string | null) => {
-    const query = folderId ? `?folder_id=${folderId}` : "";
+    const query = folderId ? `?folder_id=${folderId}` : "?root_only=true";
     return request<ArchiveDocument[]>(`/documents${query}`);
   },
   deleteDocument: (documentId: string) =>
     request<void>(`/documents/${documentId}`, {
       method: "DELETE",
     }),
-  uploadDocument: (folderId: string, file: File) => {
+  uploadDocument: (folderId: string | null, file: File) => {
     const form = new FormData();
-    form.append("folder_id", folderId);
+    if (folderId) form.append("folder_id", folderId);
     form.append("file", file);
     return request<ArchiveDocument>("/documents/upload", {
       method: "POST",
@@ -118,12 +118,12 @@ export const api = {
   keywordSearch: (query: string, folderId?: string | null) =>
     request<SearchResult[]>("/search/keyword", {
       method: "POST",
-      body: JSON.stringify({ query, folder_id: folderId, limit: 25 }),
+      body: JSON.stringify({ query, folder_id: folderId, root_only: !folderId, limit: 25 }),
     }),
   semanticSearch: (query: string, folderId?: string | null) =>
     request<SearchResult[]>("/search/semantic", {
       method: "POST",
-      body: JSON.stringify({ query, folder_id: folderId, limit: 25 }),
+      body: JSON.stringify({ query, folder_id: folderId, root_only: !folderId, limit: 25 }),
     }),
   runAction: (
     action: "summarize" | "draft" | "report" | "rewrite-style" | "merge-documents",

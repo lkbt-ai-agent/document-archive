@@ -15,9 +15,8 @@ class DocumentService:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def create_uploaded_document(self, folder_id: uuid.UUID, filename: str, mime_type: str, content: bytes) -> Document:
-        folder = self.db.get(Folder, folder_id)
-        if not folder:
+    def create_uploaded_document(self, folder_id: uuid.UUID | None, filename: str, mime_type: str, content: bytes) -> Document:
+        if folder_id and not self.db.get(Folder, folder_id):
             raise ValueError("Folder not found.")
         storage_bucket, storage_key = StorageService().save(filename, content, mime_type)
         document = Document(
@@ -38,7 +37,7 @@ class DocumentService:
 
     def create_generated_document(
         self,
-        folder_id: uuid.UUID,
+        folder_id: uuid.UUID | None,
         title: str,
         content_text: str,
         source_document_ids: list[str],
