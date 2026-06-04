@@ -671,7 +671,7 @@ function ArchiveWorkspace({
         onOpenMobileChange={setMetadataMobileOpen}
         defaultOpen
         className="min-h-0 flex-1 bg-background"
-        style={{ "--sidebar-width": "24rem" } as CSSProperties}
+        style={{ "--sidebar-width": "min(24rem, 100vw)" } as CSSProperties}
       >
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
@@ -1467,14 +1467,14 @@ function MetadataSidebar({
   }, [selected?.id, selected?.is_generated]);
 
   return (
-    <Sidebar side="right" collapsible="offcanvas" mobileWidth="100vw" className="z-30 border-l bg-background text-foreground">
-      <SidebarHeader className="h-[49px] shrink-0 flex-row items-center justify-between border-b px-4">
-        <div className="text-sm font-semibold">문서 메타데이터</div>
+    <Sidebar side="right" collapsible="offcanvas" mobileWidth="100vw" className="z-30 max-w-[100vw] overflow-hidden border-l bg-background text-foreground">
+      <SidebarHeader className="h-[49px] min-w-0 shrink-0 flex-row items-center justify-between border-b px-4">
+        <div className="min-w-0 truncate text-sm font-semibold">문서 메타데이터</div>
         <MetadataSidebarClose />
       </SidebarHeader>
-      <SidebarContent className="min-h-0 gap-0 overflow-hidden bg-background">
-        <ScrollArea className="h-[calc(100vh-49px)] min-h-0 overflow-hidden">
-          <div className="min-w-0 max-w-full space-y-6 p-4 sm:p-6">
+      <SidebarContent className="min-h-0 min-w-0 gap-0 overflow-hidden bg-background">
+        <ScrollArea className="h-[calc(100vh-49px)] min-h-0 min-w-0 overflow-hidden">
+          <div className="min-w-0 max-w-full space-y-6 overflow-hidden p-4 sm:p-6">
             {!selected ? (
               <p className="text-sm text-muted-foreground">메타데이터를 확인할 문서를 선택하세요.</p>
             ) : (
@@ -1485,7 +1485,7 @@ function MetadataSidebar({
                       <SelectedIcon className="size-5" />
                     </div>
                     <div className="min-w-0">
-                      <h2 className="break-words text-sm font-semibold [overflow-wrap:anywhere] sm:truncate">{documentDisplayName(selected)}</h2>
+                      <h2 className="line-clamp-2 break-all text-sm font-semibold [overflow-wrap:anywhere]">{documentDisplayName(selected)}</h2>
                       <p className="break-words text-xs text-muted-foreground [overflow-wrap:anywhere] sm:truncate">{selected.mime_type}</p>
                     </div>
                   </div>
@@ -1494,9 +1494,9 @@ function MetadataSidebar({
 
                 <Separator />
 
-                <section className="space-y-3">
+                <section className="min-w-0 space-y-3 overflow-hidden">
                   <h3 className="text-xs font-semibold uppercase text-muted-foreground">파일 정보</h3>
-                  <dl className="space-y-3 text-sm">
+                  <dl className="min-w-0 space-y-3 text-sm">
                     <MetaRow icon={Folder} label="폴더" value={selected.folder_id ? (folder?.path ?? "알 수 없음") : "내 드라이브"} />
                     <MetaRow icon={FileText} label="제목" value={selected.title || "없음"} />
                     {selected.corrected_filename && selected.corrected_filename !== selected.title && (
@@ -1523,9 +1523,9 @@ function MetadataSidebar({
 
                 <Separator />
 
-                <section className="space-y-3">
+                <section className="min-w-0 space-y-3 overflow-hidden">
                   <h3 className="text-xs font-semibold uppercase text-muted-foreground">AI 메타데이터</h3>
-                  <dl className="space-y-3 text-sm">
+                  <dl className="min-w-0 space-y-3 text-sm">
                     <MetaRow icon={Tag} label="태그" value={selected.metadata_row?.tags.join(", ") || "없음"} />
                     <MetaRow icon={Languages} label="언어" value={selected.metadata_row?.language || "없음"} />
                     <MetaRow icon={FileType} label="문서 유형" value={selected.metadata_row?.document_type || "없음"} />
@@ -1537,7 +1537,7 @@ function MetadataSidebar({
                     <MetaRow icon={Clock3} label="추출 시각" value={selected.metadata_row ? formatDate(selected.metadata_row.generated_at) : "없음"} />
                   </dl>
                   {selected.metadata_row?.summary && (
-                    <p className="overflow-hidden rounded-md border bg-muted/40 p-3 text-sm leading-6 break-words [overflow-wrap:anywhere]">
+                    <p className="min-w-0 max-w-full overflow-hidden whitespace-pre-wrap break-all rounded-md border bg-muted/40 p-3 text-sm leading-6 [overflow-wrap:anywhere]">
                       {selected.metadata_row.summary}
                     </p>
                   )}
@@ -1545,7 +1545,7 @@ function MetadataSidebar({
 
                 <Separator />
 
-                <section className="space-y-3">
+                <section className="min-w-0 space-y-3 overflow-hidden">
                   <div className="flex items-center gap-2">
                     <Bot className="size-4 text-muted-foreground" />
                     <h3 className="text-xs font-semibold uppercase text-muted-foreground">AI 작업</h3>
@@ -1563,17 +1563,17 @@ function MetadataSidebar({
                 {selected.is_generated && (
                   <>
                     <Separator />
-                    <section className="space-y-3">
+                    <section className="min-w-0 space-y-3 overflow-hidden">
                       <h3 className="text-xs font-semibold uppercase text-muted-foreground">계보</h3>
                       {lineage ? (
-                        <dl className="space-y-3 text-sm">
+                        <dl className="min-w-0 space-y-3 text-sm">
                           <MetaRow icon={Sparkles} label="작업" value={formatAction(lineage.operation)} />
                           <MetaRow icon={Bot} label="모델" value={lineage.model_name} />
                           <MetaRow icon={Info} label="원본" value={formatLineageSources(lineage)} />
                           <MetaRow icon={FileText} label="프롬프트" value={lineage.prompt || "없음"} />
                         </dl>
                       ) : (
-                        <p className="text-sm text-muted-foreground">{lineageError ?? "계보를 불러오는 중..."}</p>
+                        <p className="min-w-0 break-words text-sm text-muted-foreground [overflow-wrap:anywhere]">{lineageError ?? "계보를 불러오는 중..."}</p>
                       )}
                     </section>
                   </>
@@ -1930,10 +1930,12 @@ function MetadataSidebarClose() {
 
 function MetaRow({ icon: Icon, label, value }: { icon: ElementType; label: string; value: string }) {
   return (
-    <div className="grid min-w-0 grid-cols-[1rem_minmax(0,1fr)] items-start gap-x-3 gap-y-1 sm:grid-cols-[1rem_5rem_minmax(0,1fr)] sm:gap-y-0">
+    <div className="grid min-w-0 max-w-full grid-cols-[1rem_minmax(0,1fr)] items-start gap-x-3 gap-y-1 overflow-hidden sm:grid-cols-[1rem_5rem_minmax(0,1fr)] sm:gap-y-0">
       <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-      <dt className="min-w-0 text-muted-foreground sm:col-auto">{label}</dt>
-      <dd className="col-start-2 min-w-0 whitespace-pre-wrap break-words font-medium [overflow-wrap:anywhere] sm:col-start-auto">{value}</dd>
+      <dt className="min-w-0 break-words text-muted-foreground [overflow-wrap:anywhere] sm:col-auto">{label}</dt>
+      <dd className="col-start-2 min-w-0 max-w-full whitespace-pre-wrap break-all font-medium [overflow-wrap:anywhere] sm:col-start-auto">
+        {value}
+      </dd>
     </div>
   );
 }
