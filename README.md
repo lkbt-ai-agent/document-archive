@@ -14,6 +14,12 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
+Tailscale에서 프론트엔드를 통해 API를 사용할 때는 Next.js 프록시가 같은 머신의 `127.0.0.1:8000`으로 백엔드 요청을 전달합니다. 백엔드 API 문서까지 직접 열려면 모든 인터페이스에 바인딩합니다.
+
+```bash
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
 프론트엔드:
 
 ```bash
@@ -22,9 +28,16 @@ npm install
 npm run dev
 ```
 
+Tailscale 등 다른 기기에서 접속하려면 프론트엔드도 모든 인터페이스에 바인딩합니다.
+
+```bash
+npm run dev -- --hostname 0.0.0.0
+```
+
 - UI: `http://localhost:3000`
 - API 문서: `http://127.0.0.1:8000/docs`
-- 프론트엔드 기본 API 주소: `http://127.0.0.1:8000`
+- 프론트엔드 기본 API 주소: `/api/v1` same-origin 프록시
+- Tailscale 예시: `http://xxx-macmini.tail902fcf.ts.net:3000/`에서 API는 `http://xxx-macmini.tail902fcf.ts.net:3000/api/v1`로 호출되고 Next.js가 `http://127.0.0.1:8000/api/v1`로 전달
 - 다른 백엔드 주소: `NEXT_PUBLIC_BACKEND_API_URL=http://host:port npm run dev`
 
 ## 설정

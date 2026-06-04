@@ -14,10 +14,24 @@ npm run dev
 
 ## 설정
 
-기본 백엔드 주소는 `http://127.0.0.1:8000`입니다.
+기본 백엔드 주소는 `/api/v1` same-origin 프록시입니다. `NEXT_PUBLIC_BACKEND_API_URL`을 지정하지 않으면 Next.js가 요청을 같은 머신의 `http://127.0.0.1:8000`으로 전달합니다.
 
 ```bash
 NEXT_PUBLIC_BACKEND_API_URL=http://127.0.0.1:8000 npm run dev
+```
+
+Tailscale 예시:
+
+```text
+http://xxx-macmini.tail902fcf.ts.net:3000/
+  -> http://xxx-macmini.tail902fcf.ts.net:3000/api/v1
+  -> http://127.0.0.1:8000/api/v1
+```
+
+다른 기기에서 접속하려면 Next.js dev server를 모든 인터페이스에 바인딩합니다.
+
+```bash
+npm run dev -- --hostname 0.0.0.0
 ```
 
 ## 구성

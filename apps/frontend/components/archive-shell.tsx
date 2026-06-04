@@ -138,6 +138,7 @@ export function ArchiveShell() {
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null);
   const [ragResponse, setRagResponse] = useState<RagSearchResponse | null>(null);
+  const [ragElapsedSeconds, setRagElapsedSeconds] = useState<number | null>(null);
   const [searchMode, setSearchMode] = useState<SearchMode | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -204,6 +205,7 @@ export function ArchiveShell() {
     setSelectedFolderId(folderId);
     setSearchResults(null);
     setRagResponse(null);
+    setRagElapsedSeconds(null);
     setSearchMode(null);
     setSearchDocuments([]);
     setError(null);
@@ -268,6 +270,7 @@ export function ArchiveShell() {
       setDeleteDialog(null);
       setSearchResults(null);
       setRagResponse(null);
+      setRagElapsedSeconds(null);
       setSearchMode(null);
       setSearchDocuments([]);
     } catch (deleteError) {
@@ -287,6 +290,7 @@ export function ArchiveShell() {
       await refresh(selectedFolderId, document.id);
       setSearchResults(null);
       setRagResponse(null);
+      setRagElapsedSeconds(null);
       setSearchMode(null);
       setSearchDocuments([]);
       setUploadToast({
@@ -305,10 +309,12 @@ export function ArchiveShell() {
     if (!searchQuery.trim()) {
       setSearchResults(null);
       setRagResponse(null);
+      setRagElapsedSeconds(null);
       setSearchMode(null);
       setSearchDocuments([]);
       return;
     }
+    const searchStartedAt = performance.now();
     try {
       setBusy(true);
       setError(null);
@@ -326,6 +332,7 @@ export function ArchiveShell() {
         : [];
       setSearchResults(results);
       setRagResponse(nextRagResponse);
+      setRagElapsedSeconds(nextRagResponse ? (performance.now() - searchStartedAt) / 1000 : null);
       setSearchMode(mode);
       setSearchDocuments(uniqueDocuments([...resultDocumentIds.map((documentId) => loadedDocumentsById.get(documentId)).filter(isDocument), ...fetchedDocuments]));
       const first = results[0]?.document_id;
@@ -341,6 +348,7 @@ export function ArchiveShell() {
     await refresh(selectedFolderId, document.id);
     setSearchResults(null);
     setRagResponse(null);
+    setRagElapsedSeconds(null);
     setSearchMode(null);
     setSearchDocuments([]);
     setGenerationToast({
@@ -373,6 +381,7 @@ export function ArchiveShell() {
           searchQuery={searchQuery}
           searchResults={searchResults}
           ragResponse={ragResponse}
+          ragElapsedSeconds={ragElapsedSeconds}
           selectedDocument={selectedDocument}
           selectedFolderId={selectedFolderId}
           onAction={setAiAction}
@@ -380,6 +389,7 @@ export function ArchiveShell() {
             setSearchQuery("");
             setSearchResults(null);
             setRagResponse(null);
+            setRagElapsedSeconds(null);
             setSearchMode(null);
             setSearchDocuments([]);
           }}
@@ -461,6 +471,7 @@ function ArchiveWorkspace({
   searchQuery,
   searchResults,
   ragResponse,
+  ragElapsedSeconds,
   selectedDocument,
   selectedFolderId,
   onAction,
@@ -485,6 +496,7 @@ function ArchiveWorkspace({
   searchQuery: string;
   searchResults: SearchResult[] | null;
   ragResponse: RagSearchResponse | null;
+  ragElapsedSeconds: number | null;
   selectedDocument: ArchiveDocument | null;
   selectedFolderId: string | null;
   onAction: (action: AIAction) => void;
@@ -501,6 +513,7 @@ function ArchiveWorkspace({
 }) {
   const folderSidebar = useSidebar();
   const [metadataOpen, setMetadataOpen] = useState(false);
+  const [searchMenuOpen, setSearchMenuOpen] = useState(false);
   const selectedFolder = folders.find((folder) => folder.id === selectedFolderId) ?? null;
   const rows = searchResults
     ? searchResults.map((result) => searchDocuments.find((document) => document.id === result.document_id)).filter(isDocument)
@@ -523,6 +536,11 @@ function ArchiveWorkspace({
     setMetadataOpen(true);
   }
 
+  function runSearch(mode: SearchMode) {
+    setSearchMenuOpen(false);
+    onRunSearch(mode);
+  }
+
   return (
     <SidebarInset className="min-w-0 bg-[#f7f8fb]">
       <SidebarProvider
@@ -540,7 +558,7 @@ function ArchiveWorkspace({
                 className="flex min-w-0 flex-1 items-center gap-2"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  onRunSearch("keyword");
+                  setSearchMenuOpen(true);
                 }}
               >
                 <Button type="button" variant="ghost" size="icon-sm" aria-label="폴더 사이드바 열기/닫기" onClick={folderSidebar.toggleSidebar}>
@@ -549,6 +567,7 @@ function ArchiveWorkspace({
                 <div className="relative min-w-0 flex-1">
                   <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
+                    type="search"
                     aria-label="문서 검색"
                     placeholder="문서 검색"
                     value={searchQuery}
@@ -556,90 +575,31 @@ function ArchiveWorkspace({
                     className="h-10 bg-muted/40 pl-9 shadow-none"
                   />
                 </div>
-                <HeaderTooltip label="키워드 검색">
-                  <Button
-                    type="submit"
-                    variant="outline"
-                    size="sm"
-                    className="px-2 md:hidden"
-                    aria-label="키워드 검색"
-                    disabled={busy}
-                  >
-                    {busy ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />}
-                    <span className="sr-only">키워드</span>
-                  </Button>
-                </HeaderTooltip>
-                <HeaderTooltip label="의미 검색">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="px-2 md:hidden"
-                    aria-label="의미 검색"
-                    disabled={busy}
-                    onClick={() => onRunSearch("semantic")}
-                  >
-                    {busy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-                    <span className="sr-only">의미</span>
-                  </Button>
-                </HeaderTooltip>
-                <HeaderTooltip label="RAG 답변">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="px-2 md:hidden"
-                    aria-label="RAG 답변"
-                    disabled={busy}
-                    onClick={() => onRunSearch("rag")}
-                  >
-                    {busy ? <Loader2 className="size-4 animate-spin" /> : <Bot className="size-4" />}
-                    <span className="sr-only">RAG</span>
-                  </Button>
-                </HeaderTooltip>
+                <DropdownMenu open={searchMenuOpen} onOpenChange={setSearchMenuOpen}>
+                  <DropdownMenuTrigger asChild>
+                    <Button type="button" variant="outline" size="sm" className="shrink-0 px-2 md:px-3" aria-label="검색 방식 선택">
+                      {busy ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />}
+                      검색...
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-40">
+                    <DropdownMenuItem disabled={busy} onSelect={() => runSearch("keyword")}>
+                      <Search className="size-4" />
+                      키워드
+                    </DropdownMenuItem>
+                    <DropdownMenuItem disabled={busy} onSelect={() => runSearch("semantic")}>
+                      <Sparkles className="size-4" />
+                      의미
+                    </DropdownMenuItem>
+                    <DropdownMenuItem disabled={busy} onSelect={() => runSearch("rag")}>
+                      <Bot className="size-4" />
+                      RAG 답변
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <HeaderTooltip label="메타데이터 패널 열기/닫기">
                   <MetadataSidebarTrigger className="md:hidden" />
                 </HeaderTooltip>
-                <div className="hidden md:flex md:gap-2">
-                  <HeaderTooltip label="파일명과 본문에 포함된 단어를 찾습니다">
-                    <Button
-                      type="submit"
-                      variant="outline"
-                      size="sm"
-                      aria-label="키워드 검색"
-                      disabled={busy}
-                    >
-                      {busy ? <Loader2 className="size-4 animate-spin" /> : <Search className="size-4" />}
-                      키워드
-                    </Button>
-                  </HeaderTooltip>
-                  <HeaderTooltip label="임베딩 유사도로 관련 문서를 찾습니다">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      aria-label="의미 검색"
-                      disabled={busy}
-                      onClick={() => onRunSearch("semantic")}
-                    >
-                      {busy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
-                      의미
-                    </Button>
-                  </HeaderTooltip>
-                  <HeaderTooltip label="관련 문서 조각으로 답변을 생성합니다">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      aria-label="RAG 답변"
-                      disabled={busy}
-                      onClick={() => onRunSearch("rag")}
-                    >
-                      {busy ? <Loader2 className="size-4 animate-spin" /> : <Bot className="size-4" />}
-                      답변
-                    </Button>
-                  </HeaderTooltip>
-                </div>
               </form>
               <div className="grid grid-cols-2 gap-2 md:flex md:items-center">
                 <HeaderTooltip label="문서 업로드">
@@ -702,6 +662,7 @@ function ArchiveWorkspace({
                 {ragResponse && (
                   <RagAnswerPanel
                     response={ragResponse}
+                    elapsedSeconds={ragElapsedSeconds}
                     onSelectCitation={(documentId) => selectDocumentFromRow(documentId)}
                   />
                 )}
@@ -751,9 +712,11 @@ function ArchiveWorkspace({
 
 function RagAnswerPanel({
   response,
+  elapsedSeconds,
   onSelectCitation,
 }: {
   response: RagSearchResponse;
+  elapsedSeconds: number | null;
   onSelectCitation: (documentId: string) => void;
 }) {
   return (
@@ -765,7 +728,10 @@ function RagAnswerPanel({
           </span>
           <div className="min-w-0">
             <h2 className="truncate text-sm font-semibold">RAG 답변</h2>
-            <p className="truncate text-xs text-muted-foreground">인용 {response.citations.length}개</p>
+            <p className="truncate text-xs text-muted-foreground">
+              인용 {response.citations.length}개
+              {elapsedSeconds !== null ? ` · 총 답변 소요 시간 ${formatElapsedSeconds(elapsedSeconds)}초` : ""}
+            </p>
           </div>
         </div>
         <Badge variant="secondary">Generated</Badge>

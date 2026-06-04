@@ -64,7 +64,7 @@ class StorageService:
 
     def _minio_client(self) -> Minio:
         if not all([self.settings.minio_endpoint, self.settings.minio_access_key, self.settings.minio_secret_key, self.settings.minio_bucket]):
-            raise RuntimeError("MinIO is enabled but MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY, or MINIO_BUCKET is missing in @db_config.md/environment.")
+            raise RuntimeError("MinIO is enabled but MINIO_ENDPOINT, MINIO_ACCESS_KEY, MINIO_SECRET_KEY, or MINIO_BUCKET is missing in apps/backend/.env or the environment.")
         endpoint = self.settings.minio_endpoint.removeprefix("http://").removeprefix("https://")
         secure = self.settings.minio_endpoint.startswith("https://")
         return Minio(endpoint, access_key=self.settings.minio_access_key, secret_key=self.settings.minio_secret_key, secure=secure)
