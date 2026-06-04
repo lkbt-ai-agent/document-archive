@@ -1474,19 +1474,19 @@ function MetadataSidebar({
       </SidebarHeader>
       <SidebarContent className="min-h-0 gap-0 overflow-hidden bg-background">
         <ScrollArea className="h-[calc(100vh-49px)] min-h-0 overflow-hidden">
-          <div className="min-w-0 max-w-full space-y-6 p-6">
+          <div className="min-w-0 max-w-full space-y-6 p-4 sm:p-6">
             {!selected ? (
               <p className="text-sm text-muted-foreground">메타데이터를 확인할 문서를 선택하세요.</p>
             ) : (
               <>
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 items-start justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-3">
                     <div className={cn("flex size-11 shrink-0 items-center justify-center rounded-md ring-1", fileTone[kind])}>
                       <SelectedIcon className="size-5" />
                     </div>
                     <div className="min-w-0">
-                      <h2 className="truncate text-sm font-semibold">{documentDisplayName(selected)}</h2>
-                      <p className="truncate text-xs text-muted-foreground">{selected.mime_type}</p>
+                      <h2 className="break-words text-sm font-semibold [overflow-wrap:anywhere] sm:truncate">{documentDisplayName(selected)}</h2>
+                      <p className="break-words text-xs text-muted-foreground [overflow-wrap:anywhere] sm:truncate">{selected.mime_type}</p>
                     </div>
                   </div>
                   <OriginalFileMenu documentId={selected.id} />
@@ -1930,10 +1930,10 @@ function MetadataSidebarClose() {
 
 function MetaRow({ icon: Icon, label, value }: { icon: ElementType; label: string; value: string }) {
   return (
-    <div className="grid min-w-0 grid-cols-[1rem_5rem_minmax(0,1fr)] items-start gap-3">
+    <div className="grid min-w-0 grid-cols-[1rem_minmax(0,1fr)] items-start gap-x-3 gap-y-1 sm:grid-cols-[1rem_5rem_minmax(0,1fr)] sm:gap-y-0">
       <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-      <dt className="min-w-0 text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 whitespace-pre-wrap break-words font-medium [overflow-wrap:anywhere]">{value}</dd>
+      <dt className="min-w-0 text-muted-foreground sm:col-auto">{label}</dt>
+      <dd className="col-start-2 min-w-0 whitespace-pre-wrap break-words font-medium [overflow-wrap:anywhere] sm:col-start-auto">{value}</dd>
     </div>
   );
 }
