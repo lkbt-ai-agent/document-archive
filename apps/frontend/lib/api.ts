@@ -68,6 +68,12 @@ export type Lineage = {
   generated_document_id: string;
   source_document_ids: string[];
   source_chunk_ids: string[];
+  source_documents: {
+    id: string;
+    title: string | null;
+    corrected_filename: string | null;
+    original_filename: string | null;
+  }[];
   operation: string;
   prompt: string;
   model_name: string;

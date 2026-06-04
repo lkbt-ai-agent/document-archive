@@ -21,6 +21,12 @@ from app.modules.storage.service import StorageService
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 
+def _view_media_type(document: Document) -> str:
+    if document.mime_type.startswith("text/") and "charset=" not in document.mime_type.lower():
+        return f"{document.mime_type}; charset=utf-8"
+    return document.mime_type
+
+
 def process_uploaded_document_background(document_id: uuid.UUID, content: bytes, started_at: float) -> None:
     db = SessionLocal()
     try:
@@ -104,9 +110,10 @@ def get_document_content(document_id: uuid.UUID, db: Session = Depends(get_db)) 
 
 def _original_file_response(document: Document, *, download: bool) -> FileResponse | RedirectResponse:
     storage = StorageService()
+    media_type = _view_media_type(document)
     if document.storage_bucket:
         return RedirectResponse(
-            storage.presigned_url(document.storage_object_key, document.original_filename, download=download),
+            storage.presigned_url(document.storage_object_key, document.original_filename, download=download, content_type=media_type),
             status_code=status.HTTP_307_TEMPORARY_REDIRECT,
         )
     path = storage.local_path(document.storage_object_key)
@@ -114,7 +121,7 @@ def _original_file_response(document: Document, *, download: bool) -> FileRespon
         raise HTTPException(status_code=404, detail="Stored file not found.")
     return FileResponse(
         path,
-        media_type=document.mime_type,
+        media_type=media_type,
         filename=document.original_filename,
         content_disposition_type="attachment" if download else "inline",
     )

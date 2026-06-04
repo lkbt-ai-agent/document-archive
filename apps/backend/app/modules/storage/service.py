@@ -44,16 +44,19 @@ class StorageService:
         client.put_object(self.settings.minio_bucket, object_key, BytesIO(content), length=len(content), content_type=content_type)
         return self.settings.minio_bucket, object_key
 
-    def presigned_url(self, object_key: str, filename: str, *, download: bool, expires_seconds: int = 300) -> str:
+    def presigned_url(self, object_key: str, filename: str, *, download: bool, content_type: str | None = None, expires_seconds: int = 300) -> str:
         client = self._minio_client()
         assert self.settings.minio_bucket is not None
         disposition_type = "attachment" if download else "inline"
         disposition = f"{disposition_type}; filename*={encode_rfc2231(filename, 'utf-8')}"
+        response_headers = {"response-content-disposition": disposition}
+        if content_type:
+            response_headers["response-content-type"] = content_type
         return client.presigned_get_object(
             self.settings.minio_bucket,
             object_key,
             expires=timedelta(seconds=expires_seconds),
-            response_headers={"response-content-disposition": disposition},
+            response_headers=response_headers,
         )
 
     def local_path(self, storage_object_key: str) -> Path:

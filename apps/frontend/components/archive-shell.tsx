@@ -150,6 +150,8 @@ export function ArchiveShell() {
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [uploadToast, setUploadToast] = useState<{ documentName: string; elapsedSeconds: number } | null>(null);
   const [generationToast, setGenerationToast] = useState<{ documentName: string; elapsedSeconds: number } | null>(null);
+  const [pendingUploads, setPendingUploads] = useState<Record<string, { documentName: string; startedAt: number }>>({});
+  const [pendingGenerations, setPendingGenerations] = useState<Record<string, { documentName: string; startedAt: number }>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedDocument = useMemo(
@@ -230,6 +232,56 @@ export function ArchiveShell() {
       window.clearInterval(intervalId);
     };
   }, [hasProcessingDocuments, selectedFolderId, selectedDocumentId]);
+
+  useEffect(() => {
+    const pendingIds = Array.from(new Set([...Object.keys(pendingUploads), ...Object.keys(pendingGenerations)]));
+    if (!pendingIds.length) return;
+
+    let ignore = false;
+    async function pollPendingDocuments() {
+      try {
+        const pendingDocuments = await Promise.all(pendingIds.map((documentId) => api.document(documentId)));
+        if (ignore) return;
+        for (const document of pendingDocuments) {
+          if (document.processing_status === "processing" || document.processing_status === "pending") {
+            continue;
+          }
+          setDocuments((current) =>
+            document.folder_id === selectedFolderId ? mergeDocumentIntoList(current, document) : current,
+          );
+          if (document.processing_status === "ready") {
+            const pendingUpload = pendingUploads[document.id];
+            if (pendingUpload) {
+              setUploadToast({
+                documentName: documentDisplayName(document),
+                elapsedSeconds: document.upload_elapsed_seconds ?? (performance.now() - pendingUpload.startedAt) / 1000,
+              });
+            }
+            const pendingGeneration = pendingGenerations[document.id];
+            if (pendingGeneration) {
+              setGenerationToast({
+                documentName: documentDisplayName(document),
+                elapsedSeconds: document.upload_elapsed_seconds ?? (performance.now() - pendingGeneration.startedAt) / 1000,
+              });
+            }
+          } else if (document.processing_status === "failed") {
+            setError(`${documentDisplayName(document)} 처리에 실패했습니다.`);
+          }
+          setPendingUploads((current) => removeRecordKey(current, document.id));
+          setPendingGenerations((current) => removeRecordKey(current, document.id));
+        }
+      } catch (pollError) {
+        if (!ignore) setError(pollError instanceof Error ? pollError.message : "작업 완료 상태를 확인하지 못했습니다.");
+      }
+    }
+
+    pollPendingDocuments();
+    const intervalId = window.setInterval(pollPendingDocuments, 3000);
+    return () => {
+      ignore = true;
+      window.clearInterval(intervalId);
+    };
+  }, [pendingUploads, pendingGenerations, selectedFolderId]);
 
   async function selectFolder(folderId: string | null, preferredDocumentId?: string) {
     setSelectedFolderId(folderId);
@@ -317,16 +369,16 @@ export function ArchiveShell() {
       setBusy(true);
       setError(null);
       const document = await api.uploadDocument(selectedFolderId, file);
+      setPendingUploads((current) => ({
+        ...current,
+        [document.id]: { documentName: documentDisplayName(document), startedAt: uploadStartedAt },
+      }));
       await refresh(selectedFolderId, document.id);
       setSearchResults(null);
       setRagResponse(null);
       setRagElapsedSeconds(null);
       setSearchMode(null);
       setSearchDocuments([]);
-      setUploadToast({
-        documentName: documentDisplayName(document),
-        elapsedSeconds: (performance.now() - uploadStartedAt) / 1000,
-      });
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "업로드하지 못했습니다.");
     } finally {
@@ -374,17 +426,17 @@ export function ArchiveShell() {
     }
   }
 
-  async function afterGeneration(document: ArchiveDocument, elapsedSeconds: number) {
+  async function afterGeneration(document: ArchiveDocument) {
+    setPendingGenerations((current) => ({
+      ...current,
+      [document.id]: { documentName: documentDisplayName(document), startedAt: performance.now() },
+    }));
     await refresh(selectedFolderId, document.id);
     setSearchResults(null);
     setRagResponse(null);
     setRagElapsedSeconds(null);
     setSearchMode(null);
     setSearchDocuments([]);
-    setGenerationToast({
-      documentName: documentDisplayName(document),
-      elapsedSeconds,
-    });
   }
 
   return (
@@ -470,10 +522,10 @@ export function ArchiveShell() {
         />
       </SidebarProvider>
       <Toast open={Boolean(uploadToast)} onOpenChange={(open) => !open && setUploadToast(null)}>
-        <ToastTitle>업로드 접수</ToastTitle>
+        <ToastTitle>업로드 완료</ToastTitle>
         <ToastDescription>
           {uploadToast
-            ? `${uploadToast.documentName} 업로드가 접수되었습니다. 처리가 끝나면 상태가 갱신됩니다.`
+            ? `${uploadToast.documentName} 업로드가 ${formatElapsedSeconds(uploadToast.elapsedSeconds)}초 만에 완료되었습니다.`
             : ""}
         </ToastDescription>
       </Toast>
@@ -543,6 +595,7 @@ function ArchiveWorkspace({
 }) {
   const folderSidebar = useSidebar();
   const [metadataOpen, setMetadataOpen] = useState(false);
+  const [metadataMobileOpen, setMetadataMobileOpen] = useState(false);
   const [searchMenuOpen, setSearchMenuOpen] = useState(false);
   const selectedFolder = folders.find((folder) => folder.id === selectedFolderId) ?? null;
   const rows = searchResults
@@ -559,11 +612,17 @@ function ArchiveWorkspace({
 
   function selectDocumentFromRow(documentId: string) {
     if (selectedDocument?.id === documentId) {
+      if (folderSidebar.isMobile) {
+        setMetadataOpen(true);
+        setMetadataMobileOpen(true);
+        return;
+      }
       setMetadataOpen((open) => !open);
       return;
     }
     onSelectDocument(documentId);
     setMetadataOpen(true);
+    setMetadataMobileOpen(true);
   }
 
   function runSearch(mode: SearchMode) {
@@ -576,6 +635,8 @@ function ArchiveWorkspace({
       <SidebarProvider
         open={metadataOpen}
         onOpenChange={setMetadataOpen}
+        openMobile={metadataMobileOpen}
+        onOpenMobileChange={setMetadataMobileOpen}
         defaultOpen
         className="min-h-0 flex-1 bg-background"
         style={{ "--sidebar-width": "24rem" } as CSSProperties}
@@ -1350,6 +1411,9 @@ function MetadataSidebar({
   const kind = selected ? documentKind(selected) : "text";
   const SelectedIcon = fileIcon[kind];
   const folder = selected ? folders.find((item) => item.id === selected.folder_id) : null;
+  const lineageElapsedSeconds =
+    typeof lineage?.generation_params.elapsed_seconds === "number" ? lineage.generation_params.elapsed_seconds : null;
+  const elapsedSeconds = selected?.upload_elapsed_seconds ?? (selected?.is_generated ? lineageElapsedSeconds : null);
 
   useEffect(() => {
     let ignore = false;
@@ -1412,8 +1476,8 @@ function MetadataSidebar({
                     <MetaRow icon={Info} label="소스" value={selected.source_type} />
                     <MetaRow
                       icon={Clock3}
-                      label="업로드 소요"
-                      value={selected.upload_elapsed_seconds === null ? "없음" : `${formatElapsedSeconds(selected.upload_elapsed_seconds)}초`}
+                      label={selected.is_generated ? "작업 소요" : "업로드 소요"}
+                      value={elapsedSeconds === null ? "없음" : `${formatElapsedSeconds(elapsedSeconds)}초`}
                     />
                     <MetaRow icon={CalendarDays} label="생성일" value={formatDate(selected.created_at)} />
                     <MetaRow icon={Clock3} label="수정일" value={formatDate(selected.updated_at)} />
@@ -1473,7 +1537,8 @@ function MetadataSidebar({
                         <dl className="space-y-3 text-sm">
                           <MetaRow icon={Sparkles} label="작업" value={formatAction(lineage.operation)} />
                           <MetaRow icon={Bot} label="모델" value={lineage.model_name} />
-                          <MetaRow icon={Info} label="원본" value={`${lineage.source_document_ids.length}`} />
+                          <MetaRow icon={Info} label="원본" value={formatLineageSources(lineage)} />
+                          <MetaRow icon={FileText} label="프롬프트" value={lineage.prompt || "없음"} />
                         </dl>
                       ) : (
                         <p className="text-sm text-muted-foreground">{lineageError ?? "계보를 불러오는 중..."}</p>
@@ -1503,7 +1568,7 @@ function AIActionDialog({
   selectedDocument: ArchiveDocument | null;
   selectedFolderId: string | null;
   onClose: () => void;
-  onGenerated: (document: ArchiveDocument, elapsedSeconds: number) => void | Promise<void>;
+  onGenerated: (document: ArchiveDocument) => void | Promise<void>;
 }) {
   const [instructions, setInstructions] = useState("");
   const [style, setStyle] = useState("");
@@ -1533,7 +1598,7 @@ function AIActionDialog({
         prompt: instructions,
         style: action === "rewrite-style" ? style : null,
       });
-      await onGenerated(result.document, result.generation_elapsed_seconds);
+      await onGenerated(result.document);
       closeDialog();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "AI 작업을 실행하지 못했습니다.");
@@ -1829,7 +1894,7 @@ function MetaRow({ icon: Icon, label, value }: { icon: ElementType; label: strin
     <div className="grid min-w-0 grid-cols-[1rem_5rem_minmax(0,1fr)] items-start gap-3">
       <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
       <dt className="min-w-0 text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 break-words font-medium [overflow-wrap:anywhere]">{value}</dd>
+      <dd className="min-w-0 whitespace-pre-wrap break-words font-medium [overflow-wrap:anywhere]">{value}</dd>
     </div>
   );
 }
@@ -1881,6 +1946,17 @@ function formatAction(action: string) {
   return actionLabels[action as AIAction] ?? action;
 }
 
+function formatLineageSources(lineage: Lineage) {
+  if (lineage.source_documents.length) {
+    return lineage.source_documents
+      .map((document, index) => `${index + 1}. ${document.corrected_filename || document.title || document.original_filename || shortId(document.id)}`)
+      .join("\n");
+  }
+  return lineage.source_document_ids.length
+    ? lineage.source_document_ids.map((documentId, index) => `${index + 1}. ${shortId(documentId)}`).join("\n")
+    : "없음";
+}
+
 function formatProcessingStatus(status: string) {
   const labels: Record<string, string> = {
     pending: "대기 중",
@@ -1907,6 +1983,18 @@ function isDocument(document: ArchiveDocument | undefined): document is ArchiveD
 
 function uniqueDocuments(documents: ArchiveDocument[]) {
   return Array.from(new Map(documents.map((document) => [document.id, document])).values());
+}
+
+function mergeDocumentIntoList(documents: ArchiveDocument[], document: ArchiveDocument) {
+  const exists = documents.some((item) => item.id === document.id);
+  return uniqueDocuments(exists ? documents.map((item) => (item.id === document.id ? document : item)) : [document, ...documents]);
+}
+
+function removeRecordKey<T>(record: Record<string, T>, key: string) {
+  if (!(key in record)) return record;
+  const rest = { ...record };
+  delete rest[key];
+  return rest;
 }
 
 function buildFolderTree(folders: FolderType[]) {

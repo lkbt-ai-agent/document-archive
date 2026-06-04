@@ -129,6 +129,13 @@ class GeneratedDocumentResponse(BaseModel):
     generation_elapsed_seconds: float
 
 
+class LineageSourceDocument(BaseModel):
+    id: str
+    title: str | None = None
+    corrected_filename: str | None = None
+    original_filename: str | None = None
+
+
 class LineageRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -136,6 +143,7 @@ class LineageRead(BaseModel):
     generated_document_id: uuid.UUID
     source_document_ids: list[str]
     source_chunk_ids: list[str]
+    source_documents: list[LineageSourceDocument] = Field(default_factory=list)
     operation: str
     prompt: str
     model_name: str

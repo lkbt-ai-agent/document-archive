@@ -62,6 +62,7 @@ class DocumentService:
         source_document_ids: list[str],
         prompt: str,
         operation: str,
+        elapsed_seconds: float | None = None,
     ) -> Document:
         content = content_text.encode("utf-8")
         document_id = uuid.uuid4()
@@ -80,11 +81,52 @@ class DocumentService:
             is_generated=True,
             source_type=DocumentSourceType.generated,
             processing_status=ProcessingStatus.processing,
+            upload_elapsed_seconds=elapsed_seconds,
         )
         self.db.add(document)
         self.db.flush()
-        self._index_text(document, content_text)
+        self._index_generated_text(document, content_text)
         return document
+
+    def create_generated_document_record(self, folder_id: uuid.UUID | None, title: str) -> Document:
+        if folder_id and not self.db.get(Folder, folder_id):
+            raise ValueError("Folder not found.")
+        content = b""
+        document_id = uuid.uuid4()
+        filename = f"{title}.md"
+        storage_bucket, storage_key = StorageService().save(filename, content, "text/markdown", category="generated", document_id=document_id)
+        document = Document(
+            id=document_id,
+            folder_id=folder_id,
+            title=title,
+            corrected_filename=filename,
+            original_filename=filename,
+            mime_type="text/markdown",
+            file_size=0,
+            checksum_sha256=hashlib.sha256(content).hexdigest(),
+            storage_bucket=storage_bucket,
+            storage_object_key=storage_key,
+            is_generated=True,
+            source_type=DocumentSourceType.generated,
+            processing_status=ProcessingStatus.processing,
+        )
+        self.db.add(document)
+        self.db.flush()
+        return document
+
+    def complete_generated_document(self, document: Document, title: str, content_text: str, elapsed_seconds: float) -> None:
+        content = content_text.encode("utf-8")
+        filename = f"{title}.md"
+        storage_bucket, storage_key = StorageService().save(filename, content, "text/markdown", category="generated", document_id=document.id)
+        document.title = title
+        document.corrected_filename = filename
+        document.original_filename = filename
+        document.file_size = len(content)
+        document.checksum_sha256 = hashlib.sha256(content).hexdigest()
+        document.storage_bucket = storage_bucket
+        document.storage_object_key = storage_key
+        document.upload_elapsed_seconds = elapsed_seconds
+        self._index_generated_text(document, content_text)
 
     def _process_document(self, document: Document, content: bytes) -> None:
         try:
@@ -113,6 +155,37 @@ class DocumentService:
                 organizations=metadata.organizations or [],
                 key_dates=metadata.key_dates or [],
                 model_name=generation.model_name,
+            )
+        )
+        chunks = chunk_text(text)
+        vectors = embedding.embed(chunks) if chunks else []
+        for index, chunk in enumerate(chunks):
+            self.db.add(
+                DocumentChunk(
+                    document_id=document.id,
+                    chunk_index=index,
+                    content=chunk,
+                    token_count=len(chunk.split()),
+                    embedding=vectors[index],
+                    embedding_model=embedding.model_name,
+                )
+            )
+        document.processing_status = ProcessingStatus.ready
+        document.processing_error = None
+
+    def _index_generated_text(self, document: Document, text: str) -> None:
+        embedding = get_embedding_provider()
+        self.db.add(
+            DocumentMetadata(
+                document_id=document.id,
+                summary=text[:1000],
+                tags=[],
+                language="ko",
+                document_type="generated",
+                people=[],
+                organizations=[],
+                key_dates=[],
+                model_name="generated",
             )
         )
         chunks = chunk_text(text)

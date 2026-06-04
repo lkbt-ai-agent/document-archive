@@ -25,6 +25,14 @@ LOCAL_AI_EMBEDDING_MODEL_PATH=/absolute/path/to/embedding.gguf
 LOCAL_AI_GENERATION_MODEL_PATH=/absolute/path/to/generation.gguf
 ```
 
+문서 생성/병합 요청이 `Context size has been exceeded`로 실패하면 generation 서버 컨텍스트를 늘립니다.
+
+```bash
+LOCAL_AI_GENERATION_CTX_SIZE=8192
+```
+
+이 값은 generation 서버를 다시 시작해야 적용됩니다.
+
 임베딩 서버가 배치 크기 오류를 내면 다음 값을 조정합니다.
 
 ```bash
