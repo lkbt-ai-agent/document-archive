@@ -18,11 +18,30 @@ from app.modules.documents.service import DocumentService
 
 router = APIRouter(prefix="/ai-actions", tags=["ai-actions"])
 
-ACTION_PROMPT_CHAR_LIMIT = 1200
-ACTION_SOURCE_CHAR_LIMIT = 2200
-ACTION_MIN_SOURCE_CHAR_LIMIT = 600
-ACTION_MAX_TOKENS = 768
-ACTION_MIN_MAX_TOKENS = 384
+ACTION_PROMPT_CHAR_LIMIT = 2000
+ACTION_SOURCE_CHAR_LIMIT = 8000
+ACTION_MIN_SOURCE_CHAR_LIMIT = 1200
+ACTION_MAX_TOKENS = 3072
+ACTION_MIN_MAX_TOKENS = 768
+ACTION_OPERATION_LIMITS = {
+    GenerationOperation.summary: {"source_char_limit": 8000, "max_tokens": 2048},
+    GenerationOperation.draft: {"source_char_limit": 10000, "max_tokens": 3072},
+    GenerationOperation.report: {"source_char_limit": 12000, "max_tokens": 4096},
+    GenerationOperation.rewrite_style: {"source_char_limit": 10000, "max_tokens": 3072},
+    GenerationOperation.merge: {"source_char_limit": 12000, "max_tokens": 4096},
+}
+TITLE_MAX_CHARS = 60
+TITLE_OUTPUT_PREVIEW_CHARS = 1800
+TITLE_PROMPT_PREVIEW_CHARS = 500
+TITLE_SOURCE_TITLE_LIMIT = 6
+OPERATION_LABELS = {
+    GenerationOperation.summary: "요약",
+    GenerationOperation.draft: "초안 작성",
+    GenerationOperation.report: "보고서 작성",
+    GenerationOperation.rewrite_style: "문체 변경",
+    GenerationOperation.merge: "문서 병합",
+    GenerationOperation.generated_from_prompt: "문서 생성",
+}
 SUMMARY_FOCUS_TERMS = [
     "일정",
     "접수",
@@ -52,6 +71,26 @@ def _source_chunks(db: Session, source_document_ids: list[uuid.UUID]) -> list[Do
     return list(db.scalars(stmt))
 
 
+def _operation_label(operation: GenerationOperation) -> str:
+    return OPERATION_LABELS.get(operation, operation.value.replace("_", " ").title())
+
+
+def _source_document_titles(db: Session, source_document_ids: list[uuid.UUID]) -> list[str]:
+    if not source_document_ids:
+        return []
+    documents = list(db.scalars(select(Document).where(Document.id.in_(source_document_ids))))
+    documents_by_id = {document.id: document for document in documents}
+    titles: list[str] = []
+    for document_id in source_document_ids:
+        document = documents_by_id.get(document_id)
+        if not document:
+            continue
+        title = document.title or document.corrected_filename or document.original_filename
+        if title:
+            titles.append(title)
+    return titles[:TITLE_SOURCE_TITLE_LIMIT]
+
+
 def _prompt_terms(operation: GenerationOperation, prompt: str) -> list[str]:
     terms = [term for term in re.split(r"[\s,./:;()\[\]{}<>~!?'\"`|\\]+", prompt) if len(term) >= 2]
     if operation == GenerationOperation.summary:
@@ -70,6 +109,63 @@ def _fit_text(text: str, remaining_chars: int) -> str:
     if len(text) <= remaining_chars:
         return text
     return text[: max(0, remaining_chars - 20)].rstrip() + "\n[...truncated...]"
+
+
+def _clean_generated_title(title: str) -> str:
+    cleaned = title.strip()
+    cleaned = cleaned.removeprefix("```text").removeprefix("```").removesuffix("```").strip()
+    cleaned = cleaned.strip("\"'`“”‘’")
+    cleaned = re.sub(r"[\x00-\x1f<>:\"/\\|?*#`]+", " ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" .-_")
+    if cleaned.lower().endswith(".md"):
+        cleaned = cleaned[:-3].rstrip(" .-_")
+    return cleaned[:TITLE_MAX_CHARS].strip(" .-_")
+
+
+def _fallback_title(operation: GenerationOperation, prompt: str, source_titles: list[str]) -> str:
+    label = _operation_label(operation)
+    prompt_title = _clean_generated_title(prompt[:TITLE_MAX_CHARS])
+    if prompt_title:
+        return _clean_generated_title(f"{label} - {prompt_title}")
+    if source_titles:
+        return _clean_generated_title(f"{label} - {source_titles[0]}")
+    return label
+
+
+def _generate_title(
+    db: Session,
+    operation: GenerationOperation,
+    payload: AIActionRequest,
+    output: str,
+) -> tuple[str, dict[str, object]]:
+    provider = get_text_generation_provider()
+    source_titles = _source_document_titles(db, payload.source_document_ids)
+    fallback = _fallback_title(operation, payload.prompt, source_titles)
+    prompt = payload.prompt[:TITLE_PROMPT_PREVIEW_CHARS].strip()
+    output_preview = output[:TITLE_OUTPUT_PREVIEW_CHARS].strip()
+
+    try:
+        raw_title = provider.complete(
+            "You create short Korean document titles for an archive.",
+            (
+                "Return only one title. Do not use Markdown, quotes, or a file extension. "
+                f"Keep it around 40 Korean characters and no longer than {TITLE_MAX_CHARS} characters. "
+                "Reflect the action, user intent, source titles, and generated document topic.\n\n"
+                f"Action: {_operation_label(operation)}\n"
+                f"User prompt: {prompt or '(none)'}\n"
+                f"Source titles: {', '.join(source_titles) if source_titles else '(none)'}\n"
+                f"Generated document preview:\n{output_preview}"
+            ),
+            temperature=0.1,
+            max_tokens=96,
+        )
+        title = _clean_generated_title(raw_title)
+        if title:
+            return title, {"title_source": "ai", "title_prompt_used": bool(prompt)}
+    except AIProviderRuntimeError:
+        pass
+
+    return fallback, {"title_source": "fallback", "title_prompt_used": bool(prompt)}
 
 
 def _source_text(db: Session, operation: GenerationOperation, payload: AIActionRequest, source_char_limit: int) -> tuple[str, list[str]]:
@@ -130,25 +226,51 @@ def _is_context_size_error(exc: AIProviderRuntimeError) -> bool:
     )
 
 
-def _generate_output(db: Session, operation: GenerationOperation, payload: AIActionRequest, instruction: str) -> tuple[str, list[str], float, str]:
+def _source_limits(initial_limit: int) -> list[int]:
+    candidates = [
+        initial_limit,
+        max(ACTION_MIN_SOURCE_CHAR_LIMIT, initial_limit * 2 // 3),
+        max(ACTION_MIN_SOURCE_CHAR_LIMIT, initial_limit // 2),
+        max(ACTION_MIN_SOURCE_CHAR_LIMIT, initial_limit // 3),
+        ACTION_MIN_SOURCE_CHAR_LIMIT,
+    ]
+    return list(dict.fromkeys(candidates))
+
+
+def _operation_limits(operation: GenerationOperation) -> tuple[int, int]:
+    limits = ACTION_OPERATION_LIMITS.get(operation, {})
+    return int(limits.get("source_char_limit", ACTION_SOURCE_CHAR_LIMIT)), int(limits.get("max_tokens", ACTION_MAX_TOKENS))
+
+
+def _generate_output(
+    db: Session,
+    operation: GenerationOperation,
+    payload: AIActionRequest,
+    instruction: str,
+) -> tuple[str, list[str], float, str, int, int]:
     started_at = time.perf_counter()
     provider = get_text_generation_provider()
     prompt = payload.prompt[:ACTION_PROMPT_CHAR_LIMIT]
-    source_limits = [ACTION_SOURCE_CHAR_LIMIT, max(ACTION_MIN_SOURCE_CHAR_LIMIT, ACTION_SOURCE_CHAR_LIMIT // 2), ACTION_MIN_SOURCE_CHAR_LIMIT]
-    max_tokens = ACTION_MAX_TOKENS
+    source_char_limit, max_tokens = _operation_limits(operation)
+    source_limits = _source_limits(source_char_limit)
     last_context_error: AIProviderRuntimeError | None = None
 
     for source_char_limit in source_limits:
         source_text, source_chunk_ids = _source_text(db, operation, payload, source_char_limit) if payload.source_document_ids else ("", [])
+        current_max_tokens = max_tokens
         try:
             output = provider.complete(
                 "You write clear archive documents from provided source material.",
-                f"{instruction}\n\nUser prompt:\n{prompt}\n\nSource material:\n{source_text}",
+                (
+                    f"{instruction}\n"
+                    "Return a complete Markdown document. Do not stop mid-sentence or leave an unfinished section.\n\n"
+                    f"User prompt:\n{prompt}\n\nSource material:\n{source_text}"
+                ),
                 temperature=0.2,
-                max_tokens=max_tokens,
+                max_tokens=current_max_tokens,
             )
             elapsed_seconds = round(time.perf_counter() - started_at, 3)
-            return output, source_chunk_ids, elapsed_seconds, provider.model_name
+            return output, source_chunk_ids, elapsed_seconds, provider.model_name, source_char_limit, current_max_tokens
         except AIProviderRuntimeError as exc:
             if not _is_context_size_error(exc):
                 raise
@@ -174,8 +296,8 @@ def _complete_generation_background(
                 return
             document.processing_status = ProcessingStatus.processing
             document.processing_error = None
-            output, source_chunk_ids, elapsed_seconds, model_name = _generate_output(db, operation, payload, instruction)
-            title = f"{operation.value.replace('_', ' ').title()}"
+            output, source_chunk_ids, elapsed_seconds, model_name, source_char_limit, max_tokens = _generate_output(db, operation, payload, instruction)
+            title, title_generation = _generate_title(db, operation, payload, output)
             DocumentService(db).complete_generated_document(document, title, output, elapsed_seconds)
             lineage = GeneratedDocumentLineage(
                 generated_document_id=document.id,
@@ -185,8 +307,19 @@ def _complete_generation_background(
                 prompt=payload.prompt,
                 model_name=model_name,
                 provider_name="llama.cpp",
-                generation_params={"temperature": 0.2, "style": payload.style, "elapsed_seconds": elapsed_seconds},
-                workflow_dna={"runtime": "llama.cpp", "operation": operation.value, "source_count": len(payload.source_document_ids)},
+                generation_params={
+                    "temperature": 0.2,
+                    "style": payload.style,
+                    "elapsed_seconds": elapsed_seconds,
+                    "source_char_limit": source_char_limit,
+                    "max_tokens": max_tokens,
+                },
+                workflow_dna={
+                    "runtime": "llama.cpp",
+                    "operation": operation.value,
+                    "source_count": len(payload.source_document_ids),
+                    **title_generation,
+                },
             )
             db.add(lineage)
             db.commit()
@@ -207,7 +340,7 @@ def _queue_generation(
     instruction: str,
 ) -> GeneratedDocumentResponse:
     try:
-        title = f"{operation.value.replace('_', ' ').title()}"
+        title = _operation_label(operation)
         document = DocumentService(db).create_generated_document_record(payload.folder_id, title)
         document_id = document.id
         db.commit()

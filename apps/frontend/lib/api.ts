@@ -6,6 +6,13 @@ export const API_BASE_URL = resolveApiBaseUrl();
 
 const API_V1 = `${API_BASE_URL}/api/v1`;
 
+export class ApiNetworkError extends Error {
+  constructor(message = "서버 연결이 끊겼습니다. 잠시 후 자동으로 상태를 다시 확인합니다.") {
+    super(message);
+    this.name = "ApiNetworkError";
+  }
+}
+
 export type Folder = {
   id: string;
   parent_id: string | null;
@@ -84,13 +91,21 @@ export type Lineage = {
 };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_V1}${path}`, {
-    ...init,
-    headers:
-      init?.body instanceof FormData
-        ? init.headers
-        : { "Content-Type": "application/json", ...init?.headers },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_V1}${path}`, {
+      ...init,
+      headers:
+        init?.body instanceof FormData
+          ? init.headers
+          : { "Content-Type": "application/json", ...init?.headers },
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw error;
+    }
+    throw new ApiNetworkError();
+  }
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(body.detail ?? `요청 실패: ${response.status}`);

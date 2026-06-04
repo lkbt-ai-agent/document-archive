@@ -51,7 +51,7 @@ def build_command(config: dict, role: str) -> list[str]:
         "--alias",
         model_name,
         "--ctx-size",
-        os.environ.get(f"LOCAL_AI_{role.upper()}_CTX_SIZE", "4096"),
+        os.environ.get(f"LOCAL_AI_{role.upper()}_CTX_SIZE", "8192" if role == "generation" else "4096"),
     ]
 
     if role == "ocr":

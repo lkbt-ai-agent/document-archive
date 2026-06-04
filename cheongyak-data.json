@@ -1,0 +1,381 @@
+{
+  "folder": {
+    "id": "8c086160-e2f3-4edc-9379-c8426c8958a6",
+    "parent_id": null,
+    "name": "청약",
+    "path": "/청약",
+    "created_at": "2026-06-04T13:41:30.460564+09:00",
+    "updated_at": "2026-06-04T13:41:30.460575+09:00"
+  },
+  "count": 8,
+  "details": [
+    {
+      "id": "03207efb-bed4-4840-b57a-df763b70d9b3",
+      "title": "Merge",
+      "corrected_filename": "Merge.md",
+      "original_filename": "Merge.md",
+      "mime_type": "text/markdown",
+      "processing_status": "ready",
+      "created_at": "2026-06-04T15:54:33.106492+09:00",
+      "updated_at": "2026-06-04T15:55:54.736732+09:00",
+      "metadata_summary": "# 매입임대주택 및 행복주택 입주자 모집 일정 및 서류 제출 안내\n\n## 1. 단계별 일정\n\n| 단계 | 일정 | 설명 |\n|------|------|------|\n| 공고 | 2026.05.22(금) | 입주자 모집 공고 |\n| 신청접수 | 2026.06.1(월) ~ 2026.06.4(목) | 온라인 신청 (65세 이상 고령자 등 정보취약계층은 등기우편 신청 가능) |\n| 서류제출대상자 발표 | 2026.06.5(금) | 서류제출 대상자 발표 (17:00 이후) |\n| 서류제출 | 2026.06.8(월) 10:00 ~ 2026.06.10(수) 16:00 | 온라인 또는 등기우편 제출 (등기우편은 신청기한 내 도착한 경우에 한함) |\n| 자격검증 | 2026.06.11(목) ~ 2026.07.15(수) | 국토부 주택소유확인시스템을 통한 자격 검증 |\n| 당첨자 및 예비입주자 순번 발표 | 2026.07.16(목) | 당첨자 및 예비입주자 발표 |\n| 계약체결 | 별도 안내 | 계약 체결 후 90일 이내 입주 완료 필요 (100세대 이상 공동주택은 1개월 후) |\n\n## 2. 필요 서류\n\n- 주민등록표등본 (13자리 주민등록번호 기재)\n- 주민등록표초본\n- 가족관계증명서\n- 기타 공고문에 명시된 서류 (제출 기한 내 제출 필수)\n\n> ⚠️ 공고일 이후 발급한 서류만 인정되며, 제출 서류는 반환되지 않습니다.\n\n## 3. 우선순위 및 주의사항\n\n### 3.1. 신청 유의사항\n- 신청 내용이 사실과 다를 경우 부적격 처리, 당첨 취소 등 불이익 발생\n- 신청 후 내용 변경 불가\n- 등기우편 신청 시, 신청서 및 구비서류 반드시 동봉\n- 우편 신청 시 내용 누락·오기입 시 당첨 탈락 가능\n\n### 3.2. 입주자격\n- 입주자 모집 공고일(2026.05.22) 현재 무주택 세대구성원\n- 주민등록표등본상 거주하고 있는 모집권역에 한하여 신청 가능\n- 모집권역: 서울·인천·경기 (수도권 거주자만 신청 가능)\n- 외국인 신청 불가\n\n### 3.3. 예비입주자 자격\n- 최초",
+      "metadata_title": null,
+      "extracted_text_start": "",
+      "lineage": {
+        "id": "9b733b3d-d7d8-4f0c-9cc5-8f7e9d27fde7",
+        "generated_document_id": "03207efb-bed4-4840-b57a-df763b70d9b3",
+        "source_document_ids": [
+          "f4bcaf7b-bbda-46ac-9c76-cccbf8979190",
+          "4a5b93a1-f702-4d0c-a59d-189b6253862a"
+        ],
+        "source_chunk_ids": [
+          "0c29e5cd-8097-4be2-81c5-aeba4e477e38",
+          "4147e860-e1fe-4d39-85bc-69791f64f491",
+          "2e21d362-cd00-4bff-a4eb-4394f27aae0c",
+          "91930081-3b14-4155-9bb0-6876a77582d1",
+          "6c1ab945-e525-4396-b0d2-68445892d2bf",
+          "1ea1dc52-39c1-4e75-8ddb-1bbe23977b88",
+          "a772e967-6d8c-4098-abeb-7f12fb086635"
+        ],
+        "source_documents": [
+          {
+            "id": "f4bcaf7b-bbda-46ac-9c76-cccbf8979190",
+            "title": "Summary",
+            "corrected_filename": "Summary.md",
+            "original_filename": "Summary.md"
+          },
+          {
+            "id": "4a5b93a1-f702-4d0c-a59d-189b6253862a",
+            "title": "Summary",
+            "corrected_filename": "Summary.md",
+            "original_filename": "Summary.md"
+          }
+        ],
+        "operation": "merge",
+        "prompt": "두 문서를 주 타겟층 중심으로 비교하여 소개",
+        "model_name": "Qwen3-14B",
+        "provider_name": "llama.cpp",
+        "generation_params": {
+          "style": null,
+          "temperature": 0.2,
+          "elapsed_seconds": 81.257
+        },
+        "workflow_dna": {
+          "runtime": "llama.cpp",
+          "operation": "merge",
+          "source_count": 2
+        },
+        "created_at": "2026-06-04T15:55:54.769831+09:00"
+      }
+    },
+    {
+      "id": "f4bcaf7b-bbda-46ac-9c76-cccbf8979190",
+      "title": "Summary",
+      "corrected_filename": "Summary.md",
+      "original_filename": "Summary.md",
+      "mime_type": "text/markdown",
+      "processing_status": "ready",
+      "created_at": "2026-06-04T15:51:58.717209+09:00",
+      "updated_at": "2026-06-04T15:53:27.624672+09:00",
+      "metadata_summary": "# 2026년 1차 행복주택 입주자모집 요약\n\n## 1. 서류심사 및 우선공급 순위\n\n### 서류심사 결과\n- 서류심사 대상자 합격선 미만으로 점수가 하락할 경우, **우선공급 신청자격 미충족** 또는 **2세 미만 자녀 정보 허위/오기** 시 **신청자격 결격** 처리됩니다.\n- **소명 의무는 신청자에게 전적으로 있습니다.**\n\n### 우선공급 순위\n1. **2세 미만의 자녀가 있는 자** (1순위)\n   - 배점 적용 (1순위만 적용)\n   - 해당 지역 거주기간이 오래인 자 순으로 선정\n   - 추첨 적용\n2. **일반공급**\n   - 순위 → 추첨\n\n> ⚠️ 2세 미만 자녀가 있는 신청자가 **서류심사 대상자 수를 초과**할 경우, **무작위 추첨**으로 선정됩니다.\n\n---\n\n## 2. 필요 서류 및 제출 방법\n\n### 공통 제출 서류\n| 서류명 | 비고 | 발급처 |\n|--------|------|--------|\n| 행복주택 심사서류제출 신청서 | 서류심사대상자 발표 시 첨부 | SH공사 양식 |\n| 개인정보수집이용 및 제3자 제공 동의서 | 무주택세대구성원 전원 | SH공사 양식 |\n\n> ⚠️ **주택청약종합저축은행명 착오기입** 시, 납입인정회차가 조회되지 않아 **점수 인정 불가**입니다.\n\n---\n\n## 3. 입주자 선정 기준\n\n### 경쟁 시 선정 순서\n- **우선공급**\n  - 2세 미만 자녀가 있는 자 → 순위 → 배점 → 해당 지역 거주기간 오래인 자 → 추첨\n- **일반공급**\n  - 순위 → 추첨\n\n---\n\n## 4. 예비입주자 관련 사항\n\n- **예비입주자 중복선정 불가** (동일유형: 국민↔국민, 행복↔행복 등)\n- **예비입주자 선정 기준**\n  - ① 입주자모집 공고일\n  - ② 청약 접수일\n  - ③ 당첨자 발표일\n- **계약 후 입주하지 않을 경우**\n  - **계약금 반환신청서** 제출 필요 (관할지역 센터에서 신청 가능)\n  - **입주지정기간 내**에는 **전액 환불** 가능\n- **예비입주자 자격 요건 미충족 ",
+      "metadata_title": null,
+      "extracted_text_start": "",
+      "lineage": {
+        "id": "4a042dc8-b544-4e71-9c5f-6b318c8edd32",
+        "generated_document_id": "f4bcaf7b-bbda-46ac-9c76-cccbf8979190",
+        "source_document_ids": [
+          "b0e2561d-704f-42af-b0cc-592d10484bba"
+        ],
+        "source_chunk_ids": [
+          "64334551-4877-4561-9241-803974002211",
+          "ab7fac79-48fb-4679-9485-003101d47ecb",
+          "4558deaf-63a4-445a-93d9-42eed05a524e",
+          "cd54e111-15aa-4ae0-a97b-c7637feb44ea",
+          "42907580-07c0-449d-b061-bdb61d40abf7",
+          "7161ed03-f484-4191-9103-141d0f41334b"
+        ],
+        "source_documents": [
+          {
+            "id": "b0e2561d-704f-42af-b0cc-592d10484bba",
+            "title": "2026년 1차 행복주택 입주자모집",
+            "corrected_filename": "2026년 1차 행복주택 입주자모집.pdf",
+            "original_filename": "2026년 1차 행복주택 입주자 모집공고(2026_05_28_공고).pdf"
+          }
+        ],
+        "operation": "summary",
+        "prompt": "단계별 일정 정보, 필요 서류, 우선순위 내용을 중점으로 마크다운으로 정리.",
+        "model_name": "Qwen3-14B",
+        "provider_name": "llama.cpp",
+        "generation_params": {
+          "style": null,
+          "temperature": 0.2,
+          "elapsed_seconds": 88.527
+        },
+        "workflow_dna": {
+          "runtime": "llama.cpp",
+          "operation": "summary",
+          "source_count": 1
+        },
+        "created_at": "2026-06-04T15:53:27.667689+09:00"
+      }
+    },
+    {
+      "id": "f3e60f61-572e-446b-9a07-5a97fc85bebf",
+      "title": "Rewrite Style",
+      "corrected_filename": "Rewrite Style.md",
+      "original_filename": "Rewrite Style.md",
+      "mime_type": "text/markdown",
+      "processing_status": "ready",
+      "created_at": "2026-06-04T15:51:22.277149+09:00",
+      "updated_at": "2026-06-04T15:52:38.927615+09:00",
+      "metadata_summary": "**행복주택과 든든전세주택의 주 타겟 및 우선순위 정책 비교 분석**\n\n본 보고서는 행복주택과 든든전세주택의 주 타겟층과 우선순위 정책을 비교 분석하여, 두 주택 유형의 차이와 특징을 정리하고 있습니다. 분석은 공식 자료를 바탕으로 이루어졌으며, 주요 내용은 다음과 같습니다.\n\n행복주택은 무주택 세대 구성원, 신혼부부, 다자녀 가구 등 저소득층 및 중산층을 대상으로 하며, LH가 매입한 주택을 시중 시세의 80~90% 수준의 전세로 임대합니다. 대상자 선정은 신생아 가구, 자녀 수, 재혼 가구 등에 대한 배점을 고려하여 총점이 높은 순으로 선정하며, 동일 점수일 경우 추첨으로 우선순위를 결정합니다.\n\n반면, 든든전세주택은 중산층 무주택 세대를 대상으로 하며, 주거 환경이 쾌적한 다세대·연립·오피스텔 등 주택을 공급합니다. LH가 매입한 주택을 시중 시세의 80~90% 수준의 전세로 임대하며, 분양전환은 불가능하고 중복 신청도 허용되지 않습니다. 대상자 선정은 무주택 세대 구성원에 한하며, 주민등록표등본상 거주지역(서울·인천·경기)에 한하여 신청이 가능합니다.\n\n행복주택은 신혼부부, 다자녀 가구, 재혼 가구 등이 우선 고려 대상이며, 든든전세주택은 중산층 무주택 세대가 우선 대상입니다. 두 주택 유형 모두 시중 시세의 80~90% 수준의 전세로 임대되지만, 분양전환 가능 여부, 중복 신청 가능 여부, 선정 기준 등에서 차이가 있습니다. 이러한 차이를 고려하여 주택 수요자들은 각 주택 유형의 특징에 맞춰 신청을 결정해야 합니다.",
+      "metadata_title": null,
+      "extracted_text_start": "",
+      "lineage": {
+        "id": "21024100-b679-4866-8904-c6a3f8c53dd5",
+        "generated_document_id": "f3e60f61-572e-446b-9a07-5a97fc85bebf",
+        "source_document_ids": [
+          "d333a2c8-9b23-48ef-ac32-77d1d7baf398"
+        ],
+        "source_chunk_ids": [
+          "5a35cb2d-f5ff-4e92-932a-21164c7a9710",
+          "e11fb65d-f45d-4d9c-a537-6c119e7d7c40",
+          "79d4dbf5-07a1-40d3-a237-ad9b3faba0a2",
+          "c17eaa6e-30b3-4640-a3f8-1cb14d2f7f05",
+          "45311975-7194-48ca-9d1c-2c9003bce381",
+          "8b74521c-72b1-452d-a4d9-a26379f06d82"
+        ],
+        "source_documents": [
+          {
+            "id": "d333a2c8-9b23-48ef-ac32-77d1d7baf398",
+            "title": "Report",
+            "corrected_filename": "Report.md",
+            "original_filename": "Report.md"
+          }
+        ],
+        "operation": "rewrite_style",
+        "prompt": "500자 이내 인터넷 기사 제작",
+        "model_name": "Qwen3-14B",
+        "provider_name": "llama.cpp",
+        "generation_params": {
+          "style": "명확하고 전문적인 문체",
+          "temperature": 0.2,
+          "elapsed_seconds": 76.238
+        },
+        "workflow_dna": {
+          "runtime": "llama.cpp",
+          "operation": "rewrite_style",
+          "source_count": 1
+        },
+        "created_at": "2026-06-04T15:52:38.964438+09:00"
+      }
+    },
+    {
+      "id": "d333a2c8-9b23-48ef-ac32-77d1d7baf398",
+      "title": "Report",
+      "corrected_filename": "Report.md",
+      "original_filename": "Report.md",
+      "mime_type": "text/markdown",
+      "processing_status": "ready",
+      "created_at": "2026-06-04T15:01:50.067860+09:00",
+      "updated_at": "2026-06-04T15:03:46.428518+09:00",
+      "metadata_summary": "# 행복주택과 든든전세주택의 주 타겟 및 우선순위 정책 비교 분석\n\n## 1. 개요\n\n본 보고서는 **행복주택**과 **든든전세주택**의 주 타겟층과 우선순위 정책을 비교 분석하여, 두 주택 유형의 차이와 특징을 정리하고 있습니다. 분석은 제공된 공식 자료를 바탕으로 이루어졌으며, 주요 내용은 다음과 같습니다.\n\n---\n\n## 2. 주 타겟층 비교\n\n### 2.1. 행복주택\n\n- **주 타겟**: 무주택 세대 구성원, 신혼부부, 다자녀 가구 등 저소득층 및 중산층을 대상으로 합니다.\n- **특징**: LH(한국토지주택공사)가 직접 매입한 주택을 공급하며, 주거비 부담을 줄이기 위해 **시중 시세의 80~90% 수준의 전세**로 임대합니다.\n- **대상자 선정 기준**: 신생아 가구, 자녀 수, 재혼 가구 등에 대한 배점을 고려하여 총점이 높은 순으로 선정하며, 동일 점수일 경우 추첨으로 우선순위를 결정합니다.\n\n### 2.2. 든든전세주택\n\n- **주 타겟**: **중산층 가구**를 대상으로 합니다. 무주택 세대 구성원이어야 하며, 주거 환경이 쾌적한 다세대·연립·오피스텔 등 주택을 공급합니다.\n- **특징**: LH가 매입한 주택을 **시중 시세의 80~90% 수준의 전세**로 임대하며, **분양전환 불가**이며, **중복 신청 불가**입니다.\n- **대상자 선정 기준**: 무주택 세대 구성원만 신청 가능하며, 신청 시 **주민등록표등본상 거주지역**을 기준으로 신청이 가능합니다.\n\n---\n\n## 3. 우선순위 정책 비교\n\n### 3.1. 행복주택\n\n- **선정 기준**:\n  - **배점 기준**: 신생아 가구 여부(2점), 자녀 수(태아 포함, 1점), 재혼 가구 여부 등.\n  - **총점 기준**: 배점 합산 후 총점이 높은 순으로 선정.\n  - **동일 점수 시**: 추첨으로 우선순위 결정.\n- **우선순위 대상**: 신혼부부, 다자녀 가구, 재혼 가구 등이 우선 고려 대상입니다.\n\n### 3.2. 든든전세주택\n\n- **선정 기준**:\n  - **무주택",
+      "metadata_title": null,
+      "extracted_text_start": "",
+      "lineage": {
+        "id": "066cb283-fb10-476b-ac7c-d37aac58f05a",
+        "generated_document_id": "d333a2c8-9b23-48ef-ac32-77d1d7baf398",
+        "source_document_ids": [
+          "68d187a7-0c0c-465b-bcff-d16aeec157e2",
+          "b0e2561d-704f-42af-b0cc-592d10484bba"
+        ],
+        "source_chunk_ids": [
+          "7eff0c22-3649-4eac-a08c-81510534ba1a",
+          "c345cafb-c60b-4e39-8109-6c484ab193a4",
+          "0e25eee8-cb4a-4549-b187-1ea0f3d78baf",
+          "84ab37f8-96a0-4ab7-9fb8-edfb3a6a8a2f",
+          "65387db3-79ca-492c-a559-d28c46b6c2a6",
+          "33081783-93fd-4347-b7e4-30b911a7d999",
+          "0fe4694b-dbda-41b5-aba8-3207a50b8956",
+          "1254dc6e-dfd7-4ed9-b6a6-e3f07ee315a8",
+          "c1e9e4cb-fd9e-48c2-8abf-e52d69b2d466",
+          "9eb6dd2a-37b2-4423-bd3e-ec8992207d26",
+          "3fa5c1cb-288d-4749-a9da-44cecf0d0cdf"
+        ],
+        "source_documents": [
+          {
+            "id": "68d187a7-0c0c-465b-bcff-d16aeec157e2",
+            "title": "서울지역본부 든든전세주택 입주자 모집공고 (비분양전환형)",
+            "corrected_filename": "서울지역본부 든든전세주택 입주자 모집공고 (비분양전환형).pdf",
+            "original_filename": "26년_1차_비분양전환형_든든전세주택_입주자모집공고문(서울지역본부).pdf"
+          },
+          {
+            "id": "b0e2561d-704f-42af-b0cc-592d10484bba",
+            "title": "2026년 1차 행복주택 입주자모집",
+            "corrected_filename": "2026년 1차 행복주택 입주자모집.pdf",
+            "original_filename": "2026년 1차 행복주택 입주자 모집공고(2026_05_28_공고).pdf"
+          }
+        ],
+        "operation": "report",
+        "prompt": "행복주택과 든든전세주택의 주 타겟, 우선순위 정책을 비교 및 분석",
+        "model_name": "Qwen3-14B",
+        "provider_name": "llama.cpp",
+        "generation_params": {
+          "style": null,
+          "temperature": 0.2,
+          "elapsed_seconds": 115.863
+        },
+        "workflow_dna": {
+          "runtime": "llama.cpp",
+          "operation": "report",
+          "source_count": 2
+        },
+        "created_at": "2026-06-04T15:03:46.478570+09:00"
+      }
+    },
+    {
+      "id": "2e1ed01d-dd25-4bce-b9a8-747ce58f68c6",
+      "title": "Draft",
+      "corrected_filename": "Draft.md",
+      "original_filename": "Draft.md",
+      "mime_type": "text/markdown",
+      "processing_status": "ready",
+      "created_at": "2026-06-04T15:00:20.187523+09:00",
+      "updated_at": "2026-06-04T15:00:55.592519+09:00",
+      "metadata_summary": "```markdown\n# 🏠 든든전세주택 청약 안내 📢\n\n청약 마감 D-3! 든든전세주택 청약 접수 중이에요~ 💼  \n20대 여성 마케터 추천! 신혼부부, 자녀 있는 가구에게 최고의 혜택!  \n온라인 청약 플러스 앱으로 간편하게 신청 가능!  \n#드든전세주택 #청약홍보 #신혼부부청약 #20대청약 #임대주택청약\n```",
+      "metadata_title": null,
+      "extracted_text_start": "",
+      "lineage": {
+        "id": "0d3e0665-3da0-4e60-9cb8-99cc8b2c59a8",
+        "generated_document_id": "2e1ed01d-dd25-4bce-b9a8-747ce58f68c6",
+        "source_document_ids": [
+          "68d187a7-0c0c-465b-bcff-d16aeec157e2"
+        ],
+        "source_chunk_ids": [
+          "7eff0c22-3649-4eac-a08c-81510534ba1a",
+          "2c074e62-64eb-4174-93e2-e086c36e0b21",
+          "0eb2c093-0aa0-4d15-beb6-8e1edf079550",
+          "7c2d9423-d6f0-4798-95e4-6561f073cd2d",
+          "e0ce6673-31eb-43db-8648-20a0dfcec73c",
+          "185f53a2-1e2a-4a2e-aacf-82b0b475d592",
+          "79d2f527-ff19-425d-8d1a-314efc11292f",
+          "3d03ffd7-a992-49f0-8b29-c67697c98a6a",
+          "65387db3-79ca-492c-a559-d28c46b6c2a6",
+          "9a3dc1ed-b039-4a78-827e-b03429d43ec8",
+          "c986f006-d072-4d19-96e4-7d771ea38977"
+        ],
+        "source_documents": [
+          {
+            "id": "68d187a7-0c0c-465b-bcff-d16aeec157e2",
+            "title": "서울지역본부 든든전세주택 입주자 모집공고 (비분양전환형)",
+            "corrected_filename": "서울지역본부 든든전세주택 입주자 모집공고 (비분양전환형).pdf",
+            "original_filename": "26년_1차_비분양전환형_든든전세주택_입주자모집공고문(서울지역본부).pdf"
+          }
+        ],
+        "operation": "draft",
+        "prompt": "인스타그램에 올릴 청약 홍보글 멘트를 200자 이내 작성, 태그 포함, 20대 여성 마케터의 문체로 작성하여 20대-30대 사용자를 타겟으로.",
+        "model_name": "Qwen3-14B",
+        "provider_name": "llama.cpp",
+        "generation_params": {
+          "style": null,
+          "temperature": 0.2,
+          "elapsed_seconds": 35.217
+        },
+        "workflow_dna": {
+          "runtime": "llama.cpp",
+          "operation": "draft",
+          "source_count": 1
+        },
+        "created_at": "2026-06-04T15:00:55.659739+09:00"
+      }
+    },
+    {
+      "id": "4a5b93a1-f702-4d0c-a59d-189b6253862a",
+      "title": "Summary",
+      "corrected_filename": "Summary.md",
+      "original_filename": "Summary.md",
+      "mime_type": "text/markdown",
+      "processing_status": "ready",
+      "created_at": "2026-06-04T14:51:07.380954+09:00",
+      "updated_at": "2026-06-04T14:51:07.732167+09:00",
+      "metadata_summary": "```markdown\n# 매입임대주택 입주자 모집 일정 및 서류 제출 안내\n\n## 1. 단계별 일정\n\n| 단계 | 일정 | 설명 |\n|------|------|------|\n| 공고 | 2026.05.22(금) | 입주자 모집 공고 |\n| 신청접수 | 2026.06.1(월) ~ 2026.06.4(목) | 온라인 신청 (65세 이상 고령자 등 정보취약계층은 등기우편 신청 가능) |\n| 서류제출대상자 발표 | 2026.06.5(금) | 서류제출 대상자 발표 (17:00 이후) |\n| 서류제출 | 2026.06.8(월) 10:00 ~ 2026.06.10(수) 16:00 | 온라인 또는 등기우편 제출 (등기우편은 신청기한 내 도착한 경우에 한함) |\n| 자격검증 | 2026.06.11(목) ~ 2026.07.15(수) | 국토부 주택소유확인시스템을 통한 자격 검증 |\n| 당첨자 및 예비입주자 순번 발표 | 2026.07.16(목) | 당첨자 및 예비입주자 발표 |\n| 계약체결 | 별도 안내 | 계약 체결 후 90일 이내 입주 완료 필요 (100세대 이상 공동주택은 1개월 후) |\n\n## 2. 필요 서류\n\n- 주민등록표등본 (13자리 주민등록번호 기재)\n- 주민등록표초본\n- 가족관계증명서\n- 기타 공고문에 명시된 서류 (제출 기한 내 제출 필수)\n\n> ⚠️ 공고일 이후 발급한 서류만 인정되며, 제출 서류는 반환되지 않습니다.\n\n## 3. 우선순위 및 주의사항\n\n### 3.1. 신청 유의사항\n- 신청 내용이 사실과 다를 경우 부적격 처리, 당첨 취소 등 불이익 발생\n- 신청 후 내용 변경 불가\n- 등기우편 신청 시, 신청서 및 구비서류 반드시 동봉\n- 우편 신청 시 내용 누락·오기입 시 당첨 탈락 가능\n\n### 3.2. 입주자격\n- 입주자 모집 공고일(2026.05.22) 현재 무주택 세대구성원\n- 주민등록표등본상 거주하고 있는 모집권역에 한하여 신청 가능\n- 모집권역: 서울·인천·경기 (수도권 거주자만 신청 가능)\n- 외국인 신청 불가\n\n### 3.3. 예비입주자 자격",
+      "metadata_title": null,
+      "extracted_text_start": "",
+      "lineage": {
+        "id": "5b3f30a3-b644-4cab-be18-253d303bc87c",
+        "generated_document_id": "4a5b93a1-f702-4d0c-a59d-189b6253862a",
+        "source_document_ids": [
+          "68d187a7-0c0c-465b-bcff-d16aeec157e2"
+        ],
+        "source_chunk_ids": [
+          "1254dc6e-dfd7-4ed9-b6a6-e3f07ee315a8",
+          "7cfa7a30-270b-48fc-b4f8-a756a0ae5e8f",
+          "37a81fc2-9e66-4d1f-b10d-ef01335501b7",
+          "bd7ce9fe-188a-40e4-b5bb-90bd8a5e6a83",
+          "0fe4694b-dbda-41b5-aba8-3207a50b8956",
+          "185f53a2-1e2a-4a2e-aacf-82b0b475d592",
+          "b642b387-e33b-4a03-b573-39c14aed13f9",
+          "0cfe0155-4974-40f6-a5d5-528619c01df5",
+          "124d9118-fac4-4ce2-91a8-6dc909474257",
+          "3fa5c1cb-288d-4749-a9da-44cecf0d0cdf",
+          "534c548d-ea9a-40df-908f-8e27d7d9b687"
+        ],
+        "source_documents": [
+          {
+            "id": "68d187a7-0c0c-465b-bcff-d16aeec157e2",
+            "title": "서울지역본부 든든전세주택 입주자 모집공고 (비분양전환형)",
+            "corrected_filename": "서울지역본부 든든전세주택 입주자 모집공고 (비분양전환형).pdf",
+            "original_filename": "26년_1차_비분양전환형_든든전세주택_입주자모집공고문(서울지역본부).pdf"
+          }
+        ],
+        "operation": "summary",
+        "prompt": "단계별 일정 정보, 필요 서류, 우선순위 내용을 중점으로 마크다운으로 정리.",
+        "model_name": "Qwen3-14B",
+        "provider_name": "llama.cpp",
+        "generation_params": {
+          "style": null,
+          "temperature": 0.2,
+          "elapsed_seconds": 108.917
+        },
+        "workflow_dna": {
+          "runtime": "llama.cpp",
+          "operation": "summary",
+          "source_count": 1
+        },
+        "created_at": "2026-06-04T14:51:07.789013+09:00"
+      }
+    },
+    {
+      "id": "b0e2561d-704f-42af-b0cc-592d10484bba",
+      "title": "2026년 1차 행복주택 입주자모집",
+      "corrected_filename": "2026년 1차 행복주택 입주자모집.pdf",
+      "original_filename": "2026년 1차 행복주택 입주자 모집공고(2026_05_28_공고).pdf",
+      "mime_type": "application/pdf",
+      "processing_status": "ready",
+      "created_at": "2026-06-04T13:44:28.082589+09:00",
+      "updated_at": "2026-06-04T13:45:41.827806+09:00",
+      "metadata_summary": "2026년 1차 행복주택 입주자모집 공고로, 대학생, 청년, 신혼부부 등 젊은 계층을 대상으로 한 공공임대주택 입주자 모집 절차 및 일정을 안내하고 있다. 신청, 서류심사, 당첨자 발표, 계약 일정 등이 포함되어 있으며, 신청 시 유의사항과 단지별 주소, 임대금액 등도 함께 제공된다.",
+      "metadata_title": null,
+      "extracted_text_start": "",
+      "lineage": {
+        "status": 404
+      }
+    },
+    {
+      "id": "68d187a7-0c0c-465b-bcff-d16aeec157e2",
+      "title": "서울지역본부 든든전세주택 입주자 모집공고 (비분양전환형)",
+      "corrected_filename": "서울지역본부 든든전세주택 입주자 모집공고 (비분양전환형).pdf",
+      "original_filename": "26년_1차_비분양전환형_든든전세주택_입주자모집공고문(서울지역본부).pdf",
+      "mime_type": "application/pdf",
+      "processing_status": "ready",
+      "created_at": "2026-06-04T13:43:01.974237+09:00",
+      "updated_at": "2026-06-04T13:43:58.307001+09:00",
+      "metadata_summary": "LH가 서울·인천·경기 지역에서 무주택세대구성원을 대상으로 든든전세주택을 공급하는 모집공고. 시중 시세의 80~90% 수준의 전세로 임대하며, 입주자격, 신청방법, 선정기준 등이 상세히 안내됨.",
+      "metadata_title": null,
+      "extracted_text_start": "",
+      "lineage": {
+        "status": 404
+      }
+    }
+  ]
+}

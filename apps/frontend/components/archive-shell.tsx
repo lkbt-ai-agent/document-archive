@@ -33,7 +33,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ElementType, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ElementType, type ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -92,7 +92,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { api, type ArchiveDocument, type Folder as FolderType, type Lineage, type RagSearchResponse, type SearchResult } from "@/lib/api";
+import { ApiNetworkError, api, type ArchiveDocument, type Folder as FolderType, type Lineage, type RagSearchResponse, type SearchResult } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 type AIAction = "summarize" | "draft" | "report" | "rewrite-style" | "merge-documents";
@@ -167,7 +167,7 @@ export function ArchiveShell() {
     [documents],
   );
 
-  async function refresh(folderId = selectedFolderId, preferredDocumentId?: string) {
+  const refresh = useCallback(async (folderId = selectedFolderId, preferredDocumentId?: string) => {
     setError(null);
     const [nextFolders, nextDocuments] = await Promise.all([api.folders(), api.documents(folderId)]);
     setFolders(nextFolders);
@@ -182,7 +182,7 @@ export function ArchiveShell() {
     if (!nextDocuments.length) {
       setSelectedDocumentId(null);
     }
-  }
+  }, [selectedFolderId, selectedDocumentId]);
 
   useEffect(() => {
     let ignore = false;
@@ -223,6 +223,7 @@ export function ArchiveShell() {
           setSelectedDocumentId(nextDocuments[0]?.id ?? null);
         }
       } catch (pollError) {
+        if (pollError instanceof ApiNetworkError) return;
         if (!ignore) setError(pollError instanceof Error ? pollError.message : "문서 처리 상태를 갱신하지 못했습니다.");
       }
     }, 3000);
@@ -271,6 +272,7 @@ export function ArchiveShell() {
           setPendingGenerations((current) => removeRecordKey(current, document.id));
         }
       } catch (pollError) {
+        if (pollError instanceof ApiNetworkError) return;
         if (!ignore) setError(pollError instanceof Error ? pollError.message : "작업 완료 상태를 확인하지 못했습니다.");
       }
     }
@@ -439,6 +441,35 @@ export function ArchiveShell() {
     setSearchDocuments([]);
   }
 
+  async function recoverAfterInterruptedGeneration() {
+    await refresh(selectedFolderId);
+    setSearchResults(null);
+    setRagResponse(null);
+    setRagElapsedSeconds(null);
+    setSearchMode(null);
+    setSearchDocuments([]);
+  }
+
+  useEffect(() => {
+    async function refreshVisiblePage() {
+      if (document.visibilityState !== "visible") return;
+      try {
+        await refresh(selectedFolderId);
+      } catch (resumeError) {
+        if (!(resumeError instanceof ApiNetworkError)) {
+          setError(resumeError instanceof Error ? resumeError.message : "아카이브를 다시 동기화하지 못했습니다.");
+        }
+      }
+    }
+
+    window.addEventListener("pageshow", refreshVisiblePage);
+    document.addEventListener("visibilitychange", refreshVisiblePage);
+    return () => {
+      window.removeEventListener("pageshow", refreshVisiblePage);
+      document.removeEventListener("visibilitychange", refreshVisiblePage);
+    };
+  }, [refresh, selectedFolderId]);
+
   return (
     <ToastProvider swipeDirection="right">
       <SidebarProvider defaultOpen>
@@ -499,6 +530,7 @@ export function ArchiveShell() {
           selectedFolderId={selectedFolderId}
           onClose={() => setAiAction(null)}
           onGenerated={afterGeneration}
+          onInterrupted={recoverAfterInterruptedGeneration}
         />
         <FolderFormDialog
           busy={busy}
@@ -1562,6 +1594,7 @@ function AIActionDialog({
   selectedFolderId,
   onClose,
   onGenerated,
+  onInterrupted,
 }: {
   action: AIAction | null;
   documents: ArchiveDocument[];
@@ -1569,6 +1602,7 @@ function AIActionDialog({
   selectedFolderId: string | null;
   onClose: () => void;
   onGenerated: (document: ArchiveDocument) => void | Promise<void>;
+  onInterrupted: () => void | Promise<void>;
 }) {
   const [instructions, setInstructions] = useState("");
   const [style, setStyle] = useState("");
@@ -1601,6 +1635,11 @@ function AIActionDialog({
       await onGenerated(result.document);
       closeDialog();
     } catch (submitError) {
+      if (submitError instanceof ApiNetworkError) {
+        await onInterrupted();
+        setError("브라우저 연결이 끊겨 서버 상태를 다시 확인했습니다. 생성 중인 문서는 목록에서 진행 상태가 표시됩니다.");
+        return;
+      }
       setError(submitError instanceof Error ? submitError.message : "AI 작업을 실행하지 못했습니다.");
     } finally {
       setLoading(false);

@@ -8,6 +8,7 @@ import uuid
 from sqlalchemy.orm import Session
 
 from app.ai.llama_cpp_provider import get_embedding_provider, get_ocr_provider, get_text_generation_provider
+from app.ai.providers import AIProviderRuntimeError
 from app.db.models import Document, DocumentChunk, DocumentMetadata, DocumentSourceType, Folder, ProcessingStatus
 from app.modules.extraction.service import TextExtractionService, chunk_text
 from app.modules.storage.service import StorageService
@@ -22,6 +23,10 @@ def corrected_filename_from_title(title: str, original_filename: str) -> str:
     if suffix and stem.lower().endswith(suffix.lower()):
         return stem[:512]
     return f"{stem}{suffix}"[:512]
+
+
+def generated_filename_from_title(title: str) -> str:
+    return corrected_filename_from_title(title, "generated.md")
 
 
 class DocumentService:
@@ -66,13 +71,14 @@ class DocumentService:
     ) -> Document:
         content = content_text.encode("utf-8")
         document_id = uuid.uuid4()
-        storage_bucket, storage_key = StorageService().save(f"{title}.md", content, "text/markdown", category="generated", document_id=document_id)
+        filename = generated_filename_from_title(title)
+        storage_bucket, storage_key = StorageService().save(filename, content, "text/markdown", category="generated", document_id=document_id)
         document = Document(
             id=document_id,
             folder_id=folder_id,
             title=title,
-            corrected_filename=f"{title}.md",
-            original_filename=f"{title}.md",
+            corrected_filename=filename,
+            original_filename=filename,
             mime_type="text/markdown",
             file_size=len(content),
             checksum_sha256=hashlib.sha256(content).hexdigest(),
@@ -93,7 +99,7 @@ class DocumentService:
             raise ValueError("Folder not found.")
         content = b""
         document_id = uuid.uuid4()
-        filename = f"{title}.md"
+        filename = generated_filename_from_title(title)
         storage_bucket, storage_key = StorageService().save(filename, content, "text/markdown", category="generated", document_id=document_id)
         document = Document(
             id=document_id,
@@ -116,7 +122,7 @@ class DocumentService:
 
     def complete_generated_document(self, document: Document, title: str, content_text: str, elapsed_seconds: float) -> None:
         content = content_text.encode("utf-8")
-        filename = f"{title}.md"
+        filename = generated_filename_from_title(title)
         storage_bucket, storage_key = StorageService().save(filename, content, "text/markdown", category="generated", document_id=document.id)
         document.title = title
         document.corrected_filename = filename
@@ -174,18 +180,35 @@ class DocumentService:
         document.processing_error = None
 
     def _index_generated_text(self, document: Document, text: str) -> None:
+        generation = get_text_generation_provider()
         embedding = get_embedding_provider()
+        try:
+            metadata = generation.generate_metadata(text)
+            summary = metadata.summary
+            tags = metadata.tags
+            language = metadata.language
+            people = metadata.people or []
+            organizations = metadata.organizations or []
+            key_dates = metadata.key_dates or []
+        except AIProviderRuntimeError:
+            summary = _fallback_generated_summary(text)
+            tags = []
+            language = "ko"
+            people = []
+            organizations = []
+            key_dates = []
+
         self.db.add(
             DocumentMetadata(
                 document_id=document.id,
-                summary=text[:1000],
-                tags=[],
-                language="ko",
+                summary=summary,
+                tags=tags,
+                language=language,
                 document_type="generated",
-                people=[],
-                organizations=[],
-                key_dates=[],
-                model_name="generated",
+                people=people,
+                organizations=organizations,
+                key_dates=key_dates,
+                model_name=generation.model_name,
             )
         )
         chunks = chunk_text(text)
@@ -203,3 +226,10 @@ class DocumentService:
             )
         document.processing_status = ProcessingStatus.ready
         document.processing_error = None
+
+
+def _fallback_generated_summary(text: str, limit: int = 500) -> str:
+    normalized = re.sub(r"\s+", " ", text).strip()
+    if len(normalized) <= limit:
+        return normalized
+    return normalized[: max(0, limit - 3)].rstrip() + "..."
