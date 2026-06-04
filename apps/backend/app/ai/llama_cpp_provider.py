@@ -12,6 +12,14 @@ from app.ai.providers import AIProviderRuntimeError, EmbeddingProvider, Generate
 from app.core.config import get_settings
 
 METADATA_TEXT_CHAR_LIMIT = 3500
+DEFAULT_EMBEDDING_REQUEST_BATCH_SIZE = 1
+
+
+def _json_list(payload: dict[str, Any], key: str, limit: int) -> list[str]:
+    value = payload.get(key, [])
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()][:limit]
 
 
 def _load_provider_config() -> dict[str, Any]:
@@ -95,12 +103,29 @@ class LlamaCppOCRProvider(_LlamaProviderBase, OCRProvider):
 class LlamaCppEmbeddingProvider(_LlamaProviderBase, EmbeddingProvider):
     def __init__(self) -> None:
         super().__init__("embedding")
+        self.request_batch_size = self._request_batch_size()
+
+    def _request_batch_size(self) -> int:
+        raw_value = os.environ.get("LOCAL_AI_EMBEDDING_REQUEST_BATCH_SIZE")
+        if raw_value is None:
+            return DEFAULT_EMBEDDING_REQUEST_BATCH_SIZE
+        try:
+            value = int(raw_value)
+        except ValueError as exc:
+            raise AIProviderRuntimeError("LOCAL_AI_EMBEDDING_REQUEST_BATCH_SIZE must be an integer.") from exc
+        if value <= 0:
+            raise AIProviderRuntimeError("LOCAL_AI_EMBEDDING_REQUEST_BATCH_SIZE must be greater than zero.")
+        return value
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         if not texts:
             return []
-        data = self._post({"model": self.model_name, "input": texts})
-        return [item["embedding"] for item in data["data"]]
+        embeddings: list[list[float]] = []
+        for start in range(0, len(texts), self.request_batch_size):
+            batch = texts[start : start + self.request_batch_size]
+            data = self._post({"model": self.model_name, "input": batch})
+            embeddings.extend(item["embedding"] for item in data["data"])
+        return embeddings
 
 
 class LlamaCppTextGenerationProvider(_LlamaProviderBase, TextGenerationProvider):
@@ -132,10 +157,12 @@ class LlamaCppTextGenerationProvider(_LlamaProviderBase, TextGenerationProvider)
         system = "You produce compact JSON metadata for archived documents."
         user = (
             "Create metadata for this document. Return JSON only with keys: "
-            "title, summary, tags, language, document_type. "
+            "title, summary, tags, language, document_type, people, organizations, key_dates. "
+            "Use arrays for tags, people, organizations, and key_dates. "
+            "Use ISO dates when possible, otherwise keep the date text as written. "
             f"Document text:\n{text[:METADATA_TEXT_CHAR_LIMIT]}"
         )
-        raw = self.complete(system, user, temperature=0.1, max_tokens=512)
+        raw = self.complete(system, user, temperature=0.1, max_tokens=768)
         try:
             payload = json.loads(raw.strip().removeprefix("```json").removesuffix("```").strip())
         except json.JSONDecodeError as exc:
@@ -143,9 +170,12 @@ class LlamaCppTextGenerationProvider(_LlamaProviderBase, TextGenerationProvider)
         return GeneratedMetadata(
             title=str(payload.get("title") or "Untitled document")[:512],
             summary=str(payload.get("summary") or ""),
-            tags=[str(tag) for tag in payload.get("tags", [])][:20],
+            tags=_json_list(payload, "tags", 20),
             language=payload.get("language"),
             document_type=payload.get("document_type"),
+            people=_json_list(payload, "people", 30),
+            organizations=_json_list(payload, "organizations", 30),
+            key_dates=_json_list(payload, "key_dates", 30),
         )
 
 

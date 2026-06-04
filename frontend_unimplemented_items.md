@@ -1,63 +1,35 @@
-# Frontend Unimplemented Items
+# 프론트엔드 미구현 항목
 
-Based on `architecture.md` and its referenced documents, with frontend-facing gaps inferred from the documented backend/API capabilities.
+현재 UI와 API 기준의 남은 작업입니다.
 
-## 1. RAG Answer UI
+## 중간
 
-**Description:** `architecture.md` includes RAG answers, and `docs/backend_api.md` defines `POST /search/rag`. The frontend currently combines keyword and semantic search results, but does not provide a RAG answer view with citations.
+### 문서 재처리 컨트롤
 
-**Priority:** High
+처리 실패 문서를 다시 처리하는 버튼과 상태 흐름이 없습니다. 백엔드 재처리도 미구현입니다.
 
-## 2. Document Reprocess Control
+### 검색 필터
 
-**Description:** `docs/backend_api.md` defines `POST /documents/{document_id}/process` for rerunning extraction, metadata generation, and embedding. The frontend does not expose a reprocess action or status flow for this API.
+현재 검색은 선택 폴더 중심입니다. 문서 유형, 태그, 날짜, 상태 필터 UI가 없습니다.
 
-**Priority:** Medium
+### 폴더 이동 UI
 
-## 3. Folder Rename, Move, And Delete UI
+백엔드 API는 `parent_id` 변경을 지원하지만 프론트엔드는 폴더를 다른 부모로 옮기는 별도 조작을 제공하지 않습니다.
 
-**Description:** `docs/backend_api.md` includes folder create, rename/move, and delete. The frontend currently supports folder creation and navigation, but not renaming, moving, deleting, or handling recursive delete confirmation.
+### 청크/추출 텍스트 보기
 
-**Priority:** Medium
+백엔드는 `/documents/{document_id}/content`를 제공하지만 프론트엔드는 추출 텍스트와 청크 목록을 보여주지 않습니다.
 
-## 4. Document Delete UI
+### 계보 상세
 
-**Description:** `docs/backend_api.md` includes `DELETE /documents/{document_id}`. The frontend does not expose document deletion or archive behavior.
+생성 문서의 액션, 모델, 출처 수는 볼 수 있지만 프롬프트, 제공자, 생성 파라미터, 워크플로 DNA, 출처 청크는 자세히 표시하지 않습니다.
 
-**Priority:** Medium
+## 낮음
 
-## 5. Search Filters UI
+### 실패 복구 UX
 
-**Description:** `docs/ai_rag.md` requires filters for folder, document type, tags, date range, and status. The frontend search uses the selected folder only and does not provide controls for the other documented filters.
+처리 오류는 표시할 수 있지만 원인별 안내나 재시도 흐름은 없습니다.
 
-**Priority:** Medium
+### MinIO 오류 UX
 
-## 6. Document Content/Chunks View
-
-**Description:** `docs/backend_api.md` defines `GET /documents/{document_id}/content` for extracted text and chunks. The frontend shows metadata but does not provide a view for extracted text or chunk content.
-
-**Priority:** Medium
-
-## 7. Full Lineage Details
-
-**Description:** `docs/data_model.md` defines generated document lineage with source documents, source chunks, prompt, model, provider, generation params, and workflow DNA metadata. The frontend currently shows only action, model, and source count.
-
-**Priority:** Medium
-
-## 8. Processing Failure Recovery UI
-
-**Description:** `docs/ai_rag.md` requires failed processing status and error preservation. The frontend displays processing errors, but does not provide retry/reprocess or guided recovery controls.
-
-**Priority:** Low
-
-## 9. MinIO/Presigned File Handling UX
-
-**Description:** `docs/storage_infra.md` allows MinIO-backed files served through backend endpoints or presigned URLs. The frontend currently opens the backend download URL, but has no specific handling for pending/unavailable MinIO download support.
-
-**Priority:** Low
-
-## 10. Generated Document Prompt And Workflow DNA Display
-
-**Description:** `docs/ai_rag.md` and `docs/data_model.md` require generated documents to store generation prompt and workflow DNA metadata. The frontend does not display the original prompt, generation params, provider name, or workflow DNA details.
-
-**Priority:** Low
+보기/다운로드는 백엔드 URL을 사용합니다. presigned URL 만료나 MinIO 장애에 대한 별도 안내는 없습니다.

@@ -22,6 +22,7 @@ def init_db() -> None:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE documents ALTER COLUMN folder_id DROP NOT NULL"))
             conn.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS corrected_filename VARCHAR(512)"))
+            conn.execute(text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS upload_elapsed_seconds DOUBLE PRECISION"))
 
 
 def get_db() -> Generator[Session]:

@@ -40,6 +40,7 @@ export type ArchiveDocument = {
   source_type: string;
   processing_status: string;
   processing_error: string | null;
+  upload_elapsed_seconds: number | null;
   created_at: string;
   updated_at: string;
   metadata_row: DocumentMetadata | null;
@@ -52,6 +53,11 @@ export type SearchResult = {
   corrected_filename: string | null;
   content: string;
   score: number | null;
+};
+
+export type RagSearchResponse = {
+  answer: string;
+  citations: SearchResult[];
 };
 
 export type Lineage = {
@@ -128,6 +134,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ query, folder_id: folderId, root_only: false, limit: 25 }),
     }),
+  ragSearch: (query: string, folderId?: string | null) =>
+    request<RagSearchResponse>("/search/rag", {
+      method: "POST",
+      body: JSON.stringify({ query, folder_id: folderId, root_only: false, limit: 8 }),
+    }),
   runAction: (
     action: "summarize" | "draft" | "report" | "rewrite-style" | "merge-documents",
     payload: {
@@ -137,7 +148,7 @@ export const api = {
       style?: string | null;
     },
   ) =>
-    request<{ document: ArchiveDocument; output: string }>(`/ai-actions/${action}`, {
+    request<{ document: ArchiveDocument; output: string; generation_elapsed_seconds: number }>(`/ai-actions/${action}`, {
       method: "POST",
       body: JSON.stringify(payload),
     }),

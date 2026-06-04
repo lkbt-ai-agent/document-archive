@@ -1,68 +1,53 @@
-# Storage and Infrastructure
+# 스토리지와 인프라
 
-Connection/config values live in `@db_config.md`.
+설정 값은 `apps/backend/.env` 또는 환경변수에서 읽습니다.
 
 ## PostgreSQL + pgvector
 
-PostgreSQL stores folders, documents, metadata, chunks, lineage, and vectors. pgvector handles semantic search inside PostgreSQL; do not add a separate vector DB.
+백엔드는 시작 시 pgvector 확장을 만들고 SQLAlchemy 모델로 테이블을 생성합니다.
 
-Use `DocumentChunk.embedding vector(n)`, where `n` matches BGE-M3 output.
+저장 데이터:
 
-Search flow:
+- 폴더
+- 문서
+- 메타데이터
+- 청크
+- 임베딩 벡터
+- 생성 문서 계보
 
-1. Embed query.
-2. Query `document_chunks` by vector distance.
-3. Join documents/folders/metadata for filters and display.
-4. Pass top chunks to generation for RAG when needed.
+`DocumentChunk.embedding`은 기본 `Vector(1024)`입니다. `LOCAL_AI_EMBEDDING_DIMENSION`을 바꾸면 모델 정의도 함께 맞춰야 합니다.
 
-Start with exact search. Add HNSW when latency requires it:
+## 파일 저장
 
-```sql
-CREATE INDEX document_chunks_embedding_hnsw_idx
-ON document_chunks
-USING hnsw (embedding vector_cosine_ops);
-```
-
-## MinIO
-
-Use MinIO for original uploads, generated files, and previews once files should survive backend restarts or exceed local-dev prototype needs.
-
-Object layout:
+`StorageService`는 같은 API로 로컬 디스크 또는 MinIO에 저장합니다.
 
 ```text
 documents/
-  originals/{document_id}/{safe_original_filename}
+  originals/{document_id}/{filename}
   generated/{document_id}/{filename}
-  previews/{document_id}/{page_or_preview_key}
 ```
 
-Do not expose MinIO credentials to the frontend. Serve files through backend endpoints or short-lived presigned URLs.
+기본 로컬 위치는 `apps/backend/.data/uploads`입니다. `LOCAL_STORAGE_DIR`로 바꿀 수 있습니다.
 
-## Storage Provider
+## MinIO
 
-```python
-class StorageProvider(Protocol):
-    async def put_file(self, *, object_key: str, data: BinaryIO, content_type: str) -> StoredObject: ...
-    async def get_file(self, *, object_key: str) -> BinaryIO: ...
-    async def delete_file(self, *, object_key: str) -> None: ...
-    async def presigned_get_url(self, *, object_key: str, expires_seconds: int) -> str: ...
-```
+MinIO 설정 네 값이 모두 있으면 기본 저장소가 MinIO가 됩니다. 명시적으로 바꾸려면 `OBJECT_STORAGE_BACKEND=local` 또는 `OBJECT_STORAGE_BACKEND=minio`를 사용합니다.
 
-## Runtime Layout
+필요 값:
+
+- `MINIO_ENDPOINT`
+- `MINIO_ACCESS_KEY`
+- `MINIO_SECRET_KEY`
+- `MINIO_BUCKET`
+
+보기와 다운로드 엔드포인트는 MinIO 객체에 대해 짧은 수명의 presigned URL로 리다이렉트합니다. 자격 증명은 프론트엔드에 노출하지 않습니다.
+
+## 런타임 배치
 
 ```text
-Next.js UI
+Next.js
   -> FastAPI
   -> PostgreSQL + pgvector
-  -> MinIO
-
-FastAPI
-  -> AI provider interfaces
-  -> llama.cpp local model processes
+  -> local storage or MinIO
+  -> llama.cpp servers
 ```
-
-## Official Docs Checked With Context7
-
-- FastAPI: `APIRouter`, `include_router`, `Depends`, Pydantic validation, background tasks.
-- pgvector: vector types, cosine/L2/inner-product operators, HNSW/IVFFlat indexes.
-- MinIO: S3-compatible buckets/objects, Python SDK, presigned upload/download URLs.

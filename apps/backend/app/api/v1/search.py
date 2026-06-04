@@ -4,14 +4,44 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.ai.llama_cpp_provider import get_embedding_provider
+from app.ai.llama_cpp_provider import get_embedding_provider, get_text_generation_provider
 from app.ai.providers import AIProviderRuntimeError
-from app.api.v1.schemas import KeywordSearchRequest, SearchResult, SemanticSearchRequest
+from app.api.v1.schemas import KeywordSearchRequest, RagCitation, RagSearchRequest, RagSearchResponse, SearchResult, SemanticSearchRequest
 from app.core.database import get_db
 from app.db.models import Document, DocumentChunk, ProcessingStatus
 
 
 router = APIRouter(prefix="/search", tags=["search"])
+
+
+def _semantic_search_results(payload: SemanticSearchRequest, db: Session) -> list[SearchResult]:
+    vector = get_embedding_provider().embed([payload.query])[0]
+    distance = DocumentChunk.embedding.cosine_distance(vector)
+    stmt = (
+        select(DocumentChunk, Document, distance.label("distance"))
+        .join(Document, Document.id == DocumentChunk.document_id)
+        .where(Document.processing_status == ProcessingStatus.ready)
+        .where(DocumentChunk.embedding.is_not(None))
+        .order_by(distance)
+        .limit(payload.limit)
+    )
+    if payload.root_only:
+        stmt = stmt.where(Document.folder_id.is_(None))
+    elif payload.folder_id:
+        stmt = stmt.where(Document.folder_id == payload.folder_id)
+    results: list[SearchResult] = []
+    for chunk, document, dist in db.execute(stmt).all():
+        results.append(
+            SearchResult(
+                chunk_id=chunk.id,
+                document_id=document.id,
+                title=document.title,
+                corrected_filename=document.corrected_filename,
+                content=chunk.content,
+                score=float(1 - dist),
+            )
+        )
+    return results
 
 
 @router.post("/keyword", response_model=list[SearchResult])
@@ -43,32 +73,43 @@ def keyword_search(payload: KeywordSearchRequest, db: Session = Depends(get_db))
 @router.post("/semantic", response_model=list[SearchResult])
 def semantic_search(payload: SemanticSearchRequest, db: Session = Depends(get_db)) -> list[SearchResult]:
     try:
-        vector = get_embedding_provider().embed([payload.query])[0]
+        return _semantic_search_results(payload, db)
     except AIProviderRuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    distance = DocumentChunk.embedding.cosine_distance(vector)
-    stmt = (
-        select(DocumentChunk, Document, distance.label("distance"))
-        .join(Document, Document.id == DocumentChunk.document_id)
-        .where(Document.processing_status == ProcessingStatus.ready)
-        .where(DocumentChunk.embedding.is_not(None))
-        .order_by(distance)
-        .limit(payload.limit)
-    )
-    if payload.root_only:
-        stmt = stmt.where(Document.folder_id.is_(None))
-    elif payload.folder_id:
-        stmt = stmt.where(Document.folder_id == payload.folder_id)
-    results: list[SearchResult] = []
-    for chunk, document, dist in db.execute(stmt).all():
-        results.append(
-            SearchResult(
-                chunk_id=chunk.id,
-                document_id=document.id,
-                title=document.title,
-                corrected_filename=document.corrected_filename,
-                content=chunk.content,
-                score=float(1 - dist),
+
+
+@router.post("/rag", response_model=RagSearchResponse)
+def rag_search(payload: RagSearchRequest, db: Session = Depends(get_db)) -> RagSearchResponse:
+    try:
+        results = _semantic_search_results(payload, db)
+        if not results:
+            return RagSearchResponse(answer="관련 문서를 찾지 못했습니다.", citations=[])
+        context = "\n\n".join(
+            (
+                f"[{index}] title={result.title or result.corrected_filename or 'Untitled'} "
+                f"document_id={result.document_id} chunk_id={result.chunk_id}\n{result.content}"
             )
+            for index, result in enumerate(results, start=1)
         )
-    return results
+        answer = get_text_generation_provider().complete(
+            "Answer questions using only the supplied archive excerpts. If the excerpts are insufficient, say so clearly.",
+            f"Question:\n{payload.query}\n\nArchive excerpts:\n{context[:12000]}\n\nAnswer in Korean and cite excerpt numbers inline like [1].",
+            temperature=0.1,
+            max_tokens=1024,
+        )
+    except AIProviderRuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return RagSearchResponse(
+        answer=answer,
+        citations=[
+            RagCitation(
+                chunk_id=result.chunk_id,
+                document_id=result.document_id,
+                title=result.title,
+                corrected_filename=result.corrected_filename,
+                content=result.content,
+                score=result.score,
+            )
+            for result in results
+        ],
+    )

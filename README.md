@@ -1,28 +1,10 @@
-# Document Archive
+# 문서 아카이브
 
-Local document archive project with a Next.js frontend, FastAPI backend, and optional local llama.cpp AI providers.
+Next.js, FastAPI, PostgreSQL/pgvector, 선택형 MinIO, 로컬 llama.cpp 모델을 사용하는 개인 문서 아카이브입니다.
 
-## Frontend
+## 실행
 
-Run from the frontend app directory:
-
-```bash
-cd apps/frontend
-npm install
-npm run dev
-```
-
-Open `http://localhost:3000`.
-
-The frontend calls the backend at `http://127.0.0.1:8000` by default. Override it with:
-
-```bash
-NEXT_PUBLIC_BACKEND_API_URL=http://127.0.0.1:8000 npm run dev
-```
-
-## Backend
-
-Run from the backend app directory:
+백엔드:
 
 ```bash
 cd apps/backend
@@ -32,28 +14,38 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-API docs are available at `http://127.0.0.1:8000/docs`.
-
-Database and object storage values are read from `db_config.md` or environment variables. Local AI settings are read from `.env.local-ai` when present.
-
-## llama.cpp Models
-
-The local AI startup scripts load `.env.local-ai` automatically. Use `.env.local-ai.example` as the template and set the llama.cpp server binary plus model paths before starting providers.
-
-Required local AI variables include:
+프론트엔드:
 
 ```bash
-LLAMA_CPP_SERVER_BIN=/absolute/path/to/llama-server
+cd apps/frontend
+npm install
+npm run dev
+```
+
+- UI: `http://localhost:3000`
+- API 문서: `http://127.0.0.1:8000/docs`
+- 프론트엔드 기본 API 주소: `http://127.0.0.1:8000`
+- 다른 백엔드 주소: `NEXT_PUBLIC_BACKEND_API_URL=http://host:port npm run dev`
+
+## 설정
+
+- DB/MinIO: `apps/backend/.env` 또는 환경변수.
+- 로컬 AI: `.env.local-ai`와 `config/ai_providers.json`.
+- 로컬 파일 저장 위치: 기본 `apps/backend/.data/uploads`, `LOCAL_STORAGE_DIR`로 변경 가능.
+
+필수 로컬 AI 예시:
+
+```bash
 LLAMA_CPP_OCR_BASE_URL=http://127.0.0.1:8081
 LLAMA_CPP_EMBEDDING_BASE_URL=http://127.0.0.1:8082
 LLAMA_CPP_GENERATION_BASE_URL=http://127.0.0.1:8083
-LOCAL_AI_OCR_MODEL_PATH=/absolute/path/to/ocr-model.gguf
-LOCAL_AI_OCR_MMPROJ_PATH=/absolute/path/to/ocr-mmproj.gguf
-LOCAL_AI_EMBEDDING_MODEL_PATH=/absolute/path/to/embedding-model.gguf
-LOCAL_AI_GENERATION_MODEL_PATH=/absolute/path/to/generation-model.gguf
+LOCAL_AI_OCR_MODEL_PATH=/absolute/path/to/ocr.gguf
+LOCAL_AI_OCR_MMPROJ_PATH=/absolute/path/to/mmproj.gguf
+LOCAL_AI_EMBEDDING_MODEL_PATH=/absolute/path/to/embedding.gguf
+LOCAL_AI_GENERATION_MODEL_PATH=/absolute/path/to/generation.gguf
 ```
 
-Start each provider from the project root:
+제공자 시작:
 
 ```bash
 python3 scripts/start_local_ai_provider.py ocr
@@ -61,52 +53,19 @@ python3 scripts/start_local_ai_provider.py embedding
 python3 scripts/start_local_ai_provider.py generation
 ```
 
-Provider roles:
-
-| Role | Default port | Purpose |
-| --- | --- | --- |
-| `ocr` | `8081` | OCR and image analysis |
-| `embedding` | `8082` | Embeddings and semantic search |
-| `generation` | `8083` | Summarization, tagging, document generation, and merge |
-
-Print a provider command without starting it:
-
-```bash
-python3 scripts/start_local_ai_provider.py generation --print-only
-```
-
-Check local AI configuration and server health:
+상태 확인:
 
 ```bash
 python3 scripts/local_ai_health_check.py
-```
-
-Run an end-to-end local AI verification:
-
-```bash
 python3 scripts/verify_local_ai.py --image /absolute/path/to/sample-image.png
 ```
 
-On memory-constrained machines, start only the llama.cpp providers needed for the current task.
+## 기능
 
-## Typical Local Startup
+- 폴더와 문서 관리.
+- PDF, 이미지, 텍스트, Markdown 업로드.
+- 텍스트 추출, 메타데이터 생성, 청킹, 임베딩.
+- 키워드 검색과 의미 검색.
+- 요약, 초안, 보고서, 문체 변경, 문서 병합.
 
-Use separate terminal sessions:
-
-```bash
-# Terminal 1: backend
-cd apps/backend
-. .venv/bin/activate
-uvicorn app.main:app --reload --port 8000
-```
-
-```bash
-# Terminal 2: frontend
-cd apps/frontend
-npm run dev
-```
-
-```bash
-# Terminal 3: optional generation model
-python3 scripts/start_local_ai_provider.py generation
-```
+자세한 구조는 [architecture.md](architecture.md)를 참고합니다.

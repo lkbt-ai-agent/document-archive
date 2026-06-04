@@ -59,6 +59,12 @@ def build_command(config: dict, role: str) -> list[str]:
         command.extend(["--mmproj", str(mmproj_path)])
     elif role == "embedding":
         command.append("--embedding")
+        batch_size = os.environ.get("LOCAL_AI_EMBEDDING_BATCH_SIZE")
+        if batch_size:
+            command.extend(["--batch-size", batch_size])
+        ubatch_size = os.environ.get("LOCAL_AI_EMBEDDING_UBATCH_SIZE")
+        if ubatch_size:
+            command.extend(["--ubatch-size", ubatch_size])
         pooling = os.environ.get("LOCAL_AI_EMBEDDING_POOLING")
         if pooling:
             command.extend(["--pooling", pooling])

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+import time
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
@@ -26,12 +27,14 @@ async def upload_document(
     folder_id: uuid.UUID | None = Form(default=None),
     db: Session = Depends(get_db),
 ) -> Document:
+    started_at = time.perf_counter()
     ext = Path(file.filename or "").suffix.lower()
     if ext not in SUPPORTED_EXTENSIONS:
         raise HTTPException(status_code=415, detail="Unsupported file type. Supported types: jpg, png, webp, PDF, txt, md.")
     content = await file.read()
     try:
         document = DocumentService(db).create_uploaded_document(folder_id, file.filename or "upload", file.content_type or "application/octet-stream", content)
+        document.upload_elapsed_seconds = round(time.perf_counter() - started_at, 3)
         db.flush()
         db.refresh(document)
         return document

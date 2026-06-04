@@ -1,89 +1,50 @@
-# AI and RAG
+# AI와 RAG
 
-All model calls go through provider interfaces. llama.cpp is the first runtime, not a hard dependency of domain modules.
+AI 호출은 `apps/backend/app/ai/providers.py`의 제공자 인터페이스와 `llama_cpp_provider.py` 구현을 거칩니다. llama.cpp 서버는 OpenAI 호환 엔드포인트를 사용합니다.
 
-Phase 2.5 local runtime setup, environment variables, provider config, and verification scripts are documented in [Local AI Model Setup](local_ai_models.md). Backend integration remains a Phase 3 task.
+## 제공자
 
-## Local Model Map
+- OCR: 이미지 파일에서 텍스트 추출.
+- Embedding: 문서 청크와 검색어 임베딩.
+- Text generation: 메타데이터 생성, 요약, 초안, 보고서, 문체 변경, 병합.
 
-| Use | Model |
-| --- | --- |
-| OCR/image analysis | `Qwen2.5-VL-7B-Instruct` |
-| Embeddings | `BGE-M3` |
-| Metadata | `Qwen3-14B` |
-| Summaries | `Qwen3-14B` |
-| Document generation | `Qwen3-14B` |
-| Document merge | `Qwen3-14B` |
+설정은 `config/ai_providers.json`과 `.env.local-ai`에서 읽습니다. 모델 파일이 없거나 서버 URL이 없으면 모의 응답 없이 오류를 냅니다.
 
-## Provider Interfaces
-
-```python
-class OcrProvider(Protocol):
-    async def extract_text_from_image(self, *, image_bytes: bytes, mime_type: str) -> OcrResult: ...
-
-class ImageAnalysisProvider(Protocol):
-    async def describe_image(self, *, image_bytes: bytes, mime_type: str) -> ImageAnalysisResult: ...
-
-class EmbeddingProvider(Protocol):
-    async def embed_texts(self, texts: list[str]) -> list[list[float]]: ...
-    async def embed_query(self, query: str) -> list[float]: ...
-
-class MetadataProvider(Protocol):
-    async def generate_metadata(self, *, text: str) -> DocumentMetadataDraft: ...
-
-class GenerationProvider(Protocol):
-    async def summarize(self, *, chunks: list[str], instructions: str | None = None) -> str: ...
-    async def generate_document(self, *, prompt: str, context_chunks: list[str]) -> GeneratedDocumentDraft: ...
-    async def merge_documents(self, *, source_texts: list[str], instructions: str | None = None) -> GeneratedDocumentDraft: ...
-```
-
-Record `provider_name`, `model_name`, version, and params on metadata/lineage rows.
-
-## Ingestion Pipeline
+## 업로드 처리
 
 ```text
-upload
-  -> store original
-  -> Document(status=pending)
-  -> extract text
-  -> OCR/image analysis when needed
-  -> chunk text
-  -> embed chunks
-  -> generate metadata
-  -> Document(status=ready)
+file upload
+  -> local/MinIO 저장
+  -> PDF/text/image 텍스트 추출
+  -> generation 제공자로 JSON 메타데이터 생성
+  -> 360자 청크 생성
+  -> embedding 제공자로 청크 임베딩
+  -> Document ready
 ```
 
-On failure: keep file, set `processing_status = failed`, save `processing_error`.
+PDF는 `pypdf` 텍스트 추출만 사용합니다. 스캔 PDF용 OCR fallback은 아직 없습니다.
 
-## Semantic Search/RAG
+## 검색
 
-```text
-query
-  -> embed query
-  -> pgvector nearest-neighbor search
-  -> apply SQL filters
-  -> return chunks/documents
-  -> optional answer generation with citations
-```
+- 키워드 검색: `DocumentChunk.content ILIKE`.
+- 의미 검색: 검색어 임베딩 후 pgvector 코사인 거리 정렬.
+- RAG 검색: 의미 검색 청크를 generation 제공자에 전달해 답변과 인용을 반환.
+- 지원 필터: 폴더, 루트 문서, limit.
 
-Filters: folder, document type, tags, date range, status.
+## 생성 문서
 
-## Generated Documents
+AI 작업은 선택한 출처 문서의 청크 텍스트를 최대 12,000자까지 프롬프트에 넣습니다. 결과는 Markdown 문서로 저장하고 바로 청킹/임베딩합니다.
 
-```text
-prompt + source documents
-  -> fetch source chunks
-  -> generate/merge with Qwen3-14B
-  -> store generated output
-  -> create Document(is_generated=true)
-  -> create GeneratedDocumentLineage
-  -> extract/chunk/embed generated document if searchable
-```
+지원 작업:
 
-## Mac Mini 24GB Rules
+- 요약
+- 초안 작성
+- 보고서 작성
+- 문체 변경
+- 문서 병합
 
-- Use quantized GGUF models.
-- Prefer one heavyweight model call at a time.
-- Queue OCR, embedding, and generation jobs.
-- Unload idle models if memory pressure appears.
-- Avoid concurrent Qwen2.5-VL and Qwen3-14B sessions initially.
+## RAG 답변
+
+`POST /api/v1/search/rag`는 질문을 임베딩하고 관련 청크를 찾은 뒤, 제공된 청크만 근거로 한국어 답변을 생성합니다. 응답에는 답변과 인용 청크 목록이 포함됩니다.
+
+프론트엔드 RAG 답변 화면은 아직 없습니다.

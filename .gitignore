@@ -2,6 +2,7 @@ db_config
 
 .playwright-mcp
 .env.local-ai
+apps/backend/.env
 __pycache__/
 *.py[cod]
 .venv/

@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ElementType, type ReactNode } from "react";
 import {
   Archive,
   Bot,
@@ -14,10 +13,10 @@ import {
   FileImage,
   FileText,
   FileType,
-  FolderPen,
   Folder,
-  FolderPlus,
   FolderOpen,
+  FolderPen,
+  FolderPlus,
   HardDrive,
   Info,
   Languages,
@@ -34,8 +33,8 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ElementType, type ReactNode } from "react";
 
-import { api, type ArchiveDocument, type Folder as FolderType, type Lineage, type SearchResult } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -45,13 +44,6 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -59,6 +51,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -93,10 +92,11 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { api, type ArchiveDocument, type Folder as FolderType, type Lineage, type RagSearchResponse, type SearchResult } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 type AIAction = "summarize" | "draft" | "report" | "rewrite-style" | "merge-documents";
-type SearchMode = "keyword" | "semantic";
+type SearchMode = "keyword" | "semantic" | "rag";
 type FolderDialogState =
   | { mode: "create"; parentId: string | null }
   | { mode: "rename"; folder: FolderType }
@@ -137,6 +137,7 @@ export function ArchiveShell() {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null);
+  const [ragResponse, setRagResponse] = useState<RagSearchResponse | null>(null);
   const [searchMode, setSearchMode] = useState<SearchMode | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -147,6 +148,7 @@ export function ArchiveShell() {
   const [deleteDialog, setDeleteDialog] = useState<DeleteDialogState>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [uploadToast, setUploadToast] = useState<{ documentName: string; elapsedSeconds: number } | null>(null);
+  const [generationToast, setGenerationToast] = useState<{ documentName: string; elapsedSeconds: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const selectedDocument = useMemo(
@@ -201,6 +203,7 @@ export function ArchiveShell() {
   async function selectFolder(folderId: string | null, preferredDocumentId?: string) {
     setSelectedFolderId(folderId);
     setSearchResults(null);
+    setRagResponse(null);
     setSearchMode(null);
     setSearchDocuments([]);
     setError(null);
@@ -264,6 +267,7 @@ export function ArchiveShell() {
       }
       setDeleteDialog(null);
       setSearchResults(null);
+      setRagResponse(null);
       setSearchMode(null);
       setSearchDocuments([]);
     } catch (deleteError) {
@@ -282,6 +286,7 @@ export function ArchiveShell() {
       const document = await api.uploadDocument(selectedFolderId, file);
       await refresh(selectedFolderId, document.id);
       setSearchResults(null);
+      setRagResponse(null);
       setSearchMode(null);
       setSearchDocuments([]);
       setUploadToast({
@@ -299,6 +304,7 @@ export function ArchiveShell() {
   async function runSearch(mode: SearchMode) {
     if (!searchQuery.trim()) {
       setSearchResults(null);
+      setRagResponse(null);
       setSearchMode(null);
       setSearchDocuments([]);
       return;
@@ -306,9 +312,12 @@ export function ArchiveShell() {
     try {
       setBusy(true);
       setError(null);
-      const results = mode === "keyword"
-        ? await api.keywordSearch(searchQuery.trim())
-        : await api.semanticSearch(searchQuery.trim());
+      const nextRagResponse = mode === "rag" ? await api.ragSearch(searchQuery.trim(), selectedFolderId) : null;
+      const results = nextRagResponse
+        ? nextRagResponse.citations
+        : mode === "keyword"
+          ? await api.keywordSearch(searchQuery.trim(), selectedFolderId)
+          : await api.semanticSearch(searchQuery.trim(), selectedFolderId);
       const resultDocumentIds = Array.from(new Set(results.map((result) => result.document_id)));
       const loadedDocumentsById = new Map(documents.map((document) => [document.id, document]));
       const missingDocumentIds = resultDocumentIds.filter((documentId) => !loadedDocumentsById.has(documentId));
@@ -316,6 +325,7 @@ export function ArchiveShell() {
         ? await Promise.all(missingDocumentIds.map((documentId) => api.document(documentId)))
         : [];
       setSearchResults(results);
+      setRagResponse(nextRagResponse);
       setSearchMode(mode);
       setSearchDocuments(uniqueDocuments([...resultDocumentIds.map((documentId) => loadedDocumentsById.get(documentId)).filter(isDocument), ...fetchedDocuments]));
       const first = results[0]?.document_id;
@@ -327,11 +337,16 @@ export function ArchiveShell() {
     }
   }
 
-  async function afterGeneration(document: ArchiveDocument) {
+  async function afterGeneration(document: ArchiveDocument, elapsedSeconds: number) {
     await refresh(selectedFolderId, document.id);
     setSearchResults(null);
+    setRagResponse(null);
     setSearchMode(null);
     setSearchDocuments([]);
+    setGenerationToast({
+      documentName: documentDisplayName(document),
+      elapsedSeconds,
+    });
   }
 
   return (
@@ -357,12 +372,14 @@ export function ArchiveShell() {
           searchMode={searchMode}
           searchQuery={searchQuery}
           searchResults={searchResults}
+          ragResponse={ragResponse}
           selectedDocument={selectedDocument}
           selectedFolderId={selectedFolderId}
           onAction={setAiAction}
           onClearSearch={() => {
             setSearchQuery("");
             setSearchResults(null);
+            setRagResponse(null);
             setSearchMode(null);
             setSearchDocuments([]);
           }}
@@ -420,6 +437,14 @@ export function ArchiveShell() {
             : ""}
         </ToastDescription>
       </Toast>
+      <Toast open={Boolean(generationToast)} onOpenChange={(open) => !open && setGenerationToast(null)}>
+        <ToastTitle>생성 완료</ToastTitle>
+        <ToastDescription>
+          {generationToast
+            ? `${generationToast.documentName} 생성이 ${formatElapsedSeconds(generationToast.elapsedSeconds)}초 만에 완료되었습니다.`
+            : ""}
+        </ToastDescription>
+      </Toast>
       <ToastViewport />
     </ToastProvider>
   );
@@ -435,6 +460,7 @@ function ArchiveWorkspace({
   searchMode,
   searchQuery,
   searchResults,
+  ragResponse,
   selectedDocument,
   selectedFolderId,
   onAction,
@@ -458,6 +484,7 @@ function ArchiveWorkspace({
   searchMode: SearchMode | null;
   searchQuery: string;
   searchResults: SearchResult[] | null;
+  ragResponse: RagSearchResponse | null;
   selectedDocument: ArchiveDocument | null;
   selectedFolderId: string | null;
   onAction: (action: AIAction) => void;
@@ -556,6 +583,20 @@ function ArchiveWorkspace({
                     <span className="sr-only">의미</span>
                   </Button>
                 </HeaderTooltip>
+                <HeaderTooltip label="RAG 답변">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="px-2 md:hidden"
+                    aria-label="RAG 답변"
+                    disabled={busy}
+                    onClick={() => onRunSearch("rag")}
+                  >
+                    {busy ? <Loader2 className="size-4 animate-spin" /> : <Bot className="size-4" />}
+                    <span className="sr-only">RAG</span>
+                  </Button>
+                </HeaderTooltip>
                 <HeaderTooltip label="메타데이터 패널 열기/닫기">
                   <MetadataSidebarTrigger className="md:hidden" />
                 </HeaderTooltip>
@@ -583,6 +624,19 @@ function ArchiveWorkspace({
                     >
                       {busy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
                       의미
+                    </Button>
+                  </HeaderTooltip>
+                  <HeaderTooltip label="관련 문서 조각으로 답변을 생성합니다">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      aria-label="RAG 답변"
+                      disabled={busy}
+                      onClick={() => onRunSearch("rag")}
+                    >
+                      {busy ? <Loader2 className="size-4 animate-spin" /> : <Bot className="size-4" />}
+                      답변
                     </Button>
                   </HeaderTooltip>
                 </div>
@@ -630,7 +684,7 @@ function ArchiveWorkspace({
                     </div>
                     {searchResults && (
                       <button className="mt-1 text-xs text-primary underline-offset-4 hover:underline" onClick={onClearSearch}>
-                        {searchMode === "semantic" ? "의미 검색" : "키워드 검색"} 결과 {searchResults.length}개 표시 중. 검색 지우기
+                        {formatSearchMode(searchMode)} 결과 {searchResults.length}개 표시 중. 검색 지우기
                       </button>
                     )}
                   </div>
@@ -643,6 +697,13 @@ function ArchiveWorkspace({
                       <FolderContentCard key={folder.id} folder={folder} onOpen={() => onSelectFolder(folder.id)} />
                     ))}
                   </div>
+                )}
+
+                {ragResponse && (
+                  <RagAnswerPanel
+                    response={ragResponse}
+                    onSelectCitation={(documentId) => selectDocumentFromRow(documentId)}
+                  />
                 )}
 
                 <div className="overflow-hidden rounded-md border bg-card">
@@ -673,7 +734,7 @@ function ArchiveWorkspace({
                       ))
                     ) : (
                       <div className="p-4 text-sm text-muted-foreground">
-                        {childFolders.length ? "이 폴더에 문서가 없습니다." : "이 위치에 폴더나 문서가 없습니다."}
+                        {ragResponse ? "인용할 문서 조각이 없습니다." : childFolders.length ? "이 폴더에 문서가 없습니다." : "이 위치에 폴더나 문서가 없습니다."}
                       </div>
                     )}
                   </div>
@@ -685,6 +746,54 @@ function ArchiveWorkspace({
         <MetadataSidebar selected={selectedDocument} folders={folders} onAction={onAction} />
       </SidebarProvider>
     </SidebarInset>
+  );
+}
+
+function RagAnswerPanel({
+  response,
+  onSelectCitation,
+}: {
+  response: RagSearchResponse;
+  onSelectCitation: (documentId: string) => void;
+}) {
+  return (
+    <section className="overflow-hidden rounded-md border bg-card">
+      <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-violet-50 text-violet-700 ring-1 ring-violet-200">
+            <Bot className="size-4" />
+          </span>
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-semibold">RAG 답변</h2>
+            <p className="truncate text-xs text-muted-foreground">인용 {response.citations.length}개</p>
+          </div>
+        </div>
+        <Badge variant="secondary">Generated</Badge>
+      </div>
+      <div className="space-y-4 p-4">
+        <p className="whitespace-pre-wrap break-words text-sm leading-6 [overflow-wrap:anywhere]">{response.answer}</p>
+        {response.citations.length > 0 && (
+          <div className="grid gap-2 lg:grid-cols-2">
+            {response.citations.map((citation, index) => (
+              <button
+                key={citation.chunk_id}
+                type="button"
+                className="min-w-0 rounded-md border bg-muted/30 p-3 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                onClick={() => onSelectCitation(citation.document_id)}
+              >
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="min-w-0 truncate text-sm font-medium">
+                    [{index + 1}] {citation.title || citation.corrected_filename || "Untitled"}
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{formatSimilarityScore(citation.score)}</span>
+                </div>
+                <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">{citation.content}</p>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -1187,7 +1296,7 @@ function DocumentRowMenu({
           }}
         >
           <FolderOpen className="size-4" />
-          Go to Folder
+          폴더로 이동
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
@@ -1305,6 +1414,11 @@ function MetadataSidebar({
                     <MetaRow icon={FileType} label="MIME" value={selected.mime_type} />
                     <MetaRow icon={HardDrive} label="크기" value={`${formatSize(selected.file_size)} (${selected.file_size.toLocaleString("ko-KR")} bytes)`} />
                     <MetaRow icon={Info} label="소스" value={selected.source_type} />
+                    <MetaRow
+                      icon={Clock3}
+                      label="업로드 소요"
+                      value={selected.upload_elapsed_seconds === null ? "없음" : `${formatElapsedSeconds(selected.upload_elapsed_seconds)}초`}
+                    />
                     <MetaRow icon={CalendarDays} label="생성일" value={formatDate(selected.created_at)} />
                     <MetaRow icon={Clock3} label="수정일" value={formatDate(selected.updated_at)} />
                   </dl>
@@ -1393,7 +1507,7 @@ function AIActionDialog({
   selectedDocument: ArchiveDocument | null;
   selectedFolderId: string | null;
   onClose: () => void;
-  onGenerated: (document: ArchiveDocument) => void;
+  onGenerated: (document: ArchiveDocument, elapsedSeconds: number) => void | Promise<void>;
 }) {
   const [instructions, setInstructions] = useState("");
   const [style, setStyle] = useState("");
@@ -1423,7 +1537,7 @@ function AIActionDialog({
         prompt: instructions,
         style: action === "rewrite-style" ? style : null,
       });
-      onGenerated(result.document);
+      await onGenerated(result.document, result.generation_elapsed_seconds);
       closeDialog();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "AI 작업을 실행하지 못했습니다.");
@@ -1755,6 +1869,12 @@ function documentDisplayName(document: ArchiveDocument) {
 function formatSimilarityScore(score: number | null) {
   if (score === null) return "사용 불가";
   return `${Math.round(score * 100)}%`;
+}
+
+function formatSearchMode(mode: SearchMode | null) {
+  if (mode === "semantic") return "의미 검색";
+  if (mode === "rag") return "RAG 답변";
+  return "키워드 검색";
 }
 
 function shortId(id: string) {

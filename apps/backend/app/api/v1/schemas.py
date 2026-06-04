@@ -59,6 +59,7 @@ class DocumentRead(BaseModel):
     source_type: str
     processing_status: str
     processing_error: str | None
+    upload_elapsed_seconds: float | None
     created_at: datetime
     updated_at: datetime
     metadata_row: DocumentMetadataRead | None = None
@@ -88,6 +89,10 @@ class SemanticSearchRequest(BaseModel):
     limit: int = Field(default=10, ge=1, le=50)
 
 
+class RagSearchRequest(SemanticSearchRequest):
+    pass
+
+
 class SearchResult(BaseModel):
     chunk_id: uuid.UUID
     document_id: uuid.UUID
@@ -95,6 +100,20 @@ class SearchResult(BaseModel):
     corrected_filename: str | None = None
     content: str
     score: float | None = None
+
+
+class RagCitation(BaseModel):
+    chunk_id: uuid.UUID
+    document_id: uuid.UUID
+    title: str | None
+    corrected_filename: str | None = None
+    content: str
+    score: float | None = None
+
+
+class RagSearchResponse(BaseModel):
+    answer: str
+    citations: list[RagCitation]
 
 
 class AIActionRequest(BaseModel):
@@ -107,6 +126,7 @@ class AIActionRequest(BaseModel):
 class GeneratedDocumentResponse(BaseModel):
     document: DocumentRead
     output: str
+    generation_elapsed_seconds: float
 
 
 class LineageRead(BaseModel):

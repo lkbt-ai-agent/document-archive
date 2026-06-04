@@ -11,6 +11,8 @@ IMAGE_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
 TEXT_MIME_TYPES = {"text/plain", "text/markdown"}
 PDF_MIME_TYPES = {"application/pdf"}
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".pdf", ".txt", ".md"}
+DEFAULT_CHUNK_SIZE = 360
+DEFAULT_CHUNK_OVERLAP = 60
 
 
 class TextExtractionService:
@@ -28,7 +30,14 @@ class TextExtractionService:
         raise ValueError("Unsupported file type. Supported types: jpg, png, webp, PDF, txt, md.")
 
 
-def chunk_text(text: str, chunk_size: int = 800, overlap: int = 160) -> list[str]:
+def chunk_text(text: str, chunk_size: int = DEFAULT_CHUNK_SIZE, overlap: int = DEFAULT_CHUNK_OVERLAP) -> list[str]:
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be greater than zero.")
+    if overlap < 0:
+        raise ValueError("overlap must not be negative.")
+    if overlap >= chunk_size:
+        raise ValueError("overlap must be smaller than chunk_size.")
+
     normalized = "\n".join(line.rstrip() for line in text.splitlines()).strip()
     if not normalized:
         return []

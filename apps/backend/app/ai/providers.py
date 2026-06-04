@@ -15,6 +15,9 @@ class GeneratedMetadata:
     tags: list[str]
     language: str | None = None
     document_type: str | None = None
+    people: list[str] | None = None
+    organizations: list[str] | None = None
+    key_dates: list[str] | None = None
 
 
 class OCRProvider(ABC):
@@ -35,7 +38,13 @@ class TextGenerationProvider(ABC):
     model_name: str
 
     @abstractmethod
-    def complete(self, system_prompt: str, user_prompt: str, temperature: float = 0.2) -> str:
+    def complete(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: float = 0.2,
+        max_tokens: int | None = None,
+    ) -> str:
         raise NotImplementedError
 
     @abstractmethod

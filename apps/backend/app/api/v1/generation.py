@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -31,6 +32,7 @@ def _source_text(db: Session, source_document_ids: list[uuid.UUID]) -> str:
 
 def _generate(db: Session, operation: GenerationOperation, payload: AIActionRequest, instruction: str) -> GeneratedDocumentResponse:
     try:
+        started_at = time.perf_counter()
         provider = get_text_generation_provider()
         source_text = _source_text(db, payload.source_document_ids) if payload.source_document_ids else ""
         output = provider.complete(
@@ -40,6 +42,7 @@ def _generate(db: Session, operation: GenerationOperation, payload: AIActionRequ
         )
         title = f"{operation.value.replace('_', ' ').title()}"
         document = DocumentService(db).create_generated_document(payload.folder_id, title, output, [str(item) for item in payload.source_document_ids], payload.prompt, operation.value)
+        elapsed_seconds = round(time.perf_counter() - started_at, 3)
         lineage = GeneratedDocumentLineage(
             generated_document_id=document.id,
             source_document_ids=[str(item) for item in payload.source_document_ids],
@@ -47,13 +50,13 @@ def _generate(db: Session, operation: GenerationOperation, payload: AIActionRequ
             prompt=payload.prompt,
             model_name=provider.model_name,
             provider_name="llama.cpp",
-            generation_params={"temperature": 0.2, "style": payload.style},
+            generation_params={"temperature": 0.2, "style": payload.style, "elapsed_seconds": elapsed_seconds},
             workflow_dna={"runtime": "llama.cpp", "operation": operation.value, "source_count": len(payload.source_document_ids)},
         )
         db.add(lineage)
         db.flush()
         document = db.scalar(select(Document).options(selectinload(Document.metadata_row)).where(Document.id == document.id))
-        return GeneratedDocumentResponse(document=document, output=output)
+        return GeneratedDocumentResponse(document=document, output=output, generation_elapsed_seconds=elapsed_seconds)
     except AIProviderRuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 

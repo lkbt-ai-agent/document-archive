@@ -1,8 +1,8 @@
-# Document Archive Backend
+# 백엔드
 
-FastAPI backend for Phase 3.
+FastAPI 기반 문서 아카이브 API입니다.
 
-Database, pgvector, and optional MinIO connection values are defined in `../../db_config.md`. Runtime environment variables can override those values.
+## 실행
 
 ```bash
 cd apps/backend
@@ -12,6 +12,23 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-API docs are available at `http://127.0.0.1:8000/docs`.
+- 상태 확인: `GET /health`
+- API 문서: `http://127.0.0.1:8000/docs`
+- API 접두사: `/api/v1`
 
-Local AI providers use the Phase 2.5 llama.cpp config in `../../config/ai_providers.json` and `.env.local-ai`.
+## 설정
+
+- `.env`: `DATABASE_URL`, MinIO 값.
+- `.env.local-ai`: llama.cpp 서버 URL과 모델 경로.
+- `../../config/ai_providers.json`: OCR, embedding, generation 제공자 매핑.
+
+백엔드는 시작 시 pgvector 확장을 만들고 SQLAlchemy 모델 테이블을 생성합니다.
+
+## 주요 기능
+
+- 폴더 CRUD.
+- 문서 업로드, 조회, 보기, 다운로드, 삭제.
+- PDF/텍스트/이미지 텍스트 추출.
+- 메타데이터 생성, 청킹, 임베딩.
+- 키워드 검색, 의미 검색.
+- AI 생성 문서와 계보 저장.

@@ -1,36 +1,36 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 프론트엔드
 
-## Getting Started
+Next.js 16 기반 문서 아카이브 UI입니다. 첫 화면은 `ArchiveShell`이며 폴더, 문서, 검색, AI 작업을 한 화면에서 다룹니다.
 
-First, run the development server:
+## 실행
 
 ```bash
+cd apps/frontend
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+브라우저에서 `http://localhost:3000`을 엽니다.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 설정
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+기본 백엔드 주소는 `http://127.0.0.1:8000`입니다.
 
-## Learn More
+```bash
+NEXT_PUBLIC_BACKEND_API_URL=http://127.0.0.1:8000 npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+## 구성
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `app/page.tsx`: `ArchiveShell` 렌더링.
+- `components/archive-shell.tsx`: 주요 화면 상태와 동작.
+- `lib/api.ts`: FastAPI 클라이언트.
+- `components/ui/`: shadcn/Radix 기반 UI 컴포넌트.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 주요 기능
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- 폴더 생성, 이름 변경, 삭제.
+- 문서 업로드, 선택, 보기, 다운로드, 삭제.
+- 키워드 검색과 의미 검색.
+- 요약, 초안, 보고서, 문체 변경, 병합 요청.
+- 생성 문서 계보 일부 표시.

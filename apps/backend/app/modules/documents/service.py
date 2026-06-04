@@ -105,6 +105,9 @@ class DocumentService:
                 tags=metadata.tags,
                 language=metadata.language,
                 document_type=metadata.document_type,
+                people=metadata.people or [],
+                organizations=metadata.organizations or [],
+                key_dates=metadata.key_dates or [],
                 model_name=generation.model_name,
             )
         )

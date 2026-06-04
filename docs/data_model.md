@@ -1,120 +1,89 @@
-# Data Model
+# 데이터 모델
 
-Primary database: PostgreSQL. Vector search: pgvector in the same DB. Config lives in `@db_config.md`.
+PostgreSQL이 주 저장소이고 pgvector가 의미 검색 벡터를 저장합니다. 테이블은 SQLAlchemy 모델에서 생성됩니다.
 
 ## Folder
 
-```text
-id: UUID primary key
-parent_id: UUID nullable self-reference
-name: string
-path: string nullable
-created_at: timestamp
-updated_at: timestamp
-```
+- `id`
+- `parent_id`
+- `name`
+- `path`
+- `created_at`, `updated_at`
 
-Use `parent_id` for nesting. Add/maintain `path` only if tree reads need it.
+폴더는 자기 참조 트리입니다. 이름 변경이나 이동 시 하위 폴더의 `path`도 갱신합니다.
 
 ## Document
 
-```text
-id: UUID primary key
-folder_id: UUID foreign key -> Folder.id
-title: string nullable
-original_filename: string
-mime_type: string
-file_size: bigint
-checksum_sha256: string
-storage_bucket: string nullable
-storage_object_key: string
-is_generated: boolean
-source_type: enum(uploaded, generated)
-processing_status: enum(pending, processing, ready, failed)
-processing_error: text nullable
-created_at: timestamp
-updated_at: timestamp
-```
+- `id`
+- `folder_id`
+- `title`
+- `corrected_filename`
+- `original_filename`
+- `mime_type`
+- `file_size`
+- `checksum_sha256`
+- `storage_bucket`
+- `storage_object_key`
+- `is_generated`
+- `source_type`: `uploaded`, `generated`
+- `processing_status`: `pending`, `processing`, `ready`, `failed`
+- `processing_error`
+- `upload_elapsed_seconds`
+- `created_at`, `updated_at`
 
-Generated files are `Document` rows with `is_generated = true`.
+업로드 파일과 AI 생성 문서는 모두 `documents`에 저장합니다.
 
 ## DocumentMetadata
 
-```text
-id: UUID primary key
-document_id: UUID unique foreign key -> Document.id
-summary: text nullable
-tags: text[] or jsonb
-language: string nullable
-document_type: string nullable
-people: jsonb
-organizations: jsonb
-key_dates: jsonb
-model_name: string
-model_version: string nullable
-generated_at: timestamp
-```
+- `document_id`
+- `summary`
+- `tags`
+- `language`
+- `document_type`
+- `people`
+- `organizations`
+- `key_dates`
+- `model_name`
+- `model_version`
+- `generated_at`
 
-Use `jsonb` for flexible AI fields. Keep common filters as columns.
+메타데이터 생성 프롬프트는 제목, 요약, 태그, 언어, 문서 유형, 인물, 조직, 주요 날짜를 채웁니다.
 
 ## DocumentChunk
 
-```text
-id: UUID primary key
-document_id: UUID foreign key -> Document.id
-chunk_index: integer
-page_start: integer nullable
-page_end: integer nullable
-content: text
-token_count: integer nullable
-embedding: vector(<BGE-M3 dimension>)
-embedding_model: string
-embedding_version: string nullable
-created_at: timestamp
-```
+- `document_id`
+- `chunk_index`
+- `page_start`, `page_end`
+- `content`
+- `token_count`
+- `embedding`: `Vector(1024)`
+- `embedding_model`
+- `embedding_version`
+- `created_at`
 
-Embedding dimension must match the chosen BGE-M3 output. Store chunk text with vectors for fast result rendering.
+기본 청크 크기는 360자, overlap은 60자입니다. 의미 검색은 `embedding.cosine_distance()`를 사용합니다.
 
 ## GeneratedDocumentLineage
 
-```text
-id: UUID primary key
-generated_document_id: UUID foreign key -> Document.id
-source_document_ids: UUID[] or jsonb
-source_chunk_ids: UUID[] or jsonb
-operation: enum(summary, rewrite, merge, generated_from_prompt)
-prompt: text
-model_name: string
-provider_name: string
-generation_params: jsonb
-created_at: timestamp
-```
+- `generated_document_id`
+- `source_document_ids`
+- `source_chunk_ids`
+- `operation`: `summary`, `draft`, `report`, `rewrite_style`, `merge`, `generated_from_prompt`
+- `prompt`
+- `model_name`
+- `provider_name`
+- `generation_params`
+- `workflow_dna`
+- `created_at`
 
-Arrays/jsonb are enough initially. Add source join tables only if lineage queries become complex.
+현재 생성 흐름은 출처 문서 ID를 기록합니다. 출처 청크 ID는 컬럼만 있고 채우지 않습니다.
 
-## Indexes
+## 인덱스 상태
+
+현재 모델은 테이블과 pgvector 확장을 생성하지만 별도 관계형 인덱스나 HNSW 인덱스를 정의하지 않습니다. 데이터가 커지면 다음 인덱스가 필요합니다.
 
 - `folders(parent_id)`
 - `documents(folder_id)`
 - `documents(processing_status)`
-- `documents(created_at)`
 - `document_chunks(document_id, chunk_index)`
-- `document_metadata(document_id)`
-- `document_chunks.embedding` HNSW when chunk count grows
-
-## Vector Query Shape
-
-```sql
-SELECT
-  dc.id,
-  dc.document_id,
-  dc.content,
-  d.title,
-  dc.embedding <=> :query_embedding AS distance
-FROM document_chunks dc
-JOIN documents d ON d.id = dc.document_id
-WHERE d.processing_status = 'ready'
-ORDER BY dc.embedding <=> :query_embedding
-LIMIT :limit;
-```
-
-Use cosine distance for normalized text embeddings unless evaluation says otherwise.
+- `document_chunks.embedding` HNSW

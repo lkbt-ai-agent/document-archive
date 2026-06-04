@@ -1,87 +1,45 @@
-# Backend Unimplemented Items
+# 백엔드 미구현 항목
 
-Based on `architecture.md` and its referenced documents.
+현재 코드 기준의 남은 작업입니다.
 
-## 1. RAG Answer API
+## 높음
 
-**Description:** `docs/backend_api.md` defines `POST /search/rag` for semantic search plus generated answers with citations. The backend currently implements keyword search and semantic search only; there is no RAG endpoint, citation response schema, or generation flow that builds an answer from retrieved chunks.
+### 저장 문서 재처리
 
-**Priority:** High
+`POST /documents/{document_id}/process`는 존재하지만 `409`를 반환합니다. 저장된 원본을 다시 읽어 추출, 메타데이터, 임베딩을 재실행해야 합니다.
 
-## 2. Document Reprocessing Job
+### 백그라운드 작업
 
-**Description:** `docs/backend_api.md` defines `POST /documents/{document_id}/process` to enqueue or rerun extraction, metadata generation, and embedding. The current endpoint returns a `409` saying reprocessing stored objects is not implemented.
+업로드와 AI 처리가 요청 안에서 동기 실행됩니다. 긴 OCR, 임베딩, 생성 작업을 큐로 분리해야 합니다.
 
-**Priority:** High
+## 중간
 
-## 3. Background Ingestion Queue
+### 스캔 PDF OCR fallback
 
-**Description:** `docs/backend_api.md` and `docs/ai_rag.md` specify background jobs for long processing and Mac Mini 24GB limits recommend queued OCR, embedding, and generation calls. Upload processing currently runs synchronously inside the request path, and `apps/backend/app/jobs/` is not implemented.
+PDF는 `pypdf`만 사용합니다. 텍스트가 비어 있는 PDF를 이미지/OCR 경로로 넘기지 않습니다.
 
-**Priority:** High
+### 검색 필터 확장
 
-## 4. RAG/Search Filters
+검색은 `folder_id`, `root_only`, `limit`만 받습니다. 문서 유형, 태그, 날짜, 상태 필터가 없습니다.
 
-**Description:** `docs/ai_rag.md` requires filters by folder, document type, tags, date range, and status. Current keyword and semantic search support folder filtering only.
+### 출처 청크 계보
 
-**Priority:** Medium
+`GeneratedDocumentLineage.source_chunk_ids`는 저장하지 않습니다.
 
-## 5. Full Storage Provider Interface
+### 데이터베이스 인덱스
 
-**Description:** `docs/storage_infra.md` defines a replaceable `StorageProvider` with `put_file`, `get_file`, `delete_file`, and `presigned_get_url`. The current storage module supports saving local files or MinIO objects, but does not expose the documented provider interface or read/delete/presigned operations.
+테이블 생성은 있지만 관계형 인덱스와 HNSW 벡터 인덱스가 정의되어 있지 않습니다.
 
-**Priority:** Medium
+## 낮음
 
-## 6. MinIO Download/Read Path
+### 이미지 설명 제공자
 
-**Description:** `docs/storage_infra.md` requires serving files through backend endpoints or short-lived presigned URLs without exposing MinIO credentials. The current download endpoint returns `501` for MinIO-backed documents.
+이미지 OCR은 있지만 별도의 이미지 설명/분석 제공자는 없습니다.
 
-**Priority:** Medium
+### 생성 문서 처리 이력
 
-## 7. Recursive Folder Archive/Delete Confirmation
+생성 문서는 검색 가능하게 인덱싱되지만, 업로드 문서와 같은 처리 단계 이력이나 출처 청크 이력을 남기지 않습니다.
 
-**Description:** `docs/backend_api.md` says folder delete should delete if empty or archive recursively after confirmation. The current implementation only rejects non-empty folders with `409` and does not implement recursive archive/delete confirmation.
+### 모듈 정리
 
-**Priority:** Medium
-
-## 8. Folder Path Maintenance For Descendants
-
-**Description:** `docs/data_model.md` allows `path` for tree reads. The current folder update recalculates the changed folder path but does not update descendant folder paths after rename or move.
-
-**Priority:** Medium
-
-## 9. Metadata People, Organizations, And Key Dates Extraction
-
-**Description:** `docs/data_model.md` includes `people`, `organizations`, and `key_dates` on `DocumentMetadata`, and `docs/backend_api.md` lists metadata responsibilities for dates, people, and organizations. The database columns exist, but the metadata prompt only asks for title, summary, tags, language, and document type.
-
-**Priority:** Medium
-
-## 10. Image Analysis Provider
-
-**Description:** `docs/ai_rag.md` defines both OCR and image analysis provider capabilities. The current provider layer implements OCR text extraction from images, but not a separate image description or analysis provider method.
-
-**Priority:** Low
-
-## 11. Source Chunk Lineage
-
-**Description:** `docs/data_model.md` includes `source_chunk_ids` for generated document lineage. The column exists, but generation currently records source document IDs only and leaves source chunk IDs empty.
-
-**Priority:** Low
-
-## 12. Generated Document Re-indexing Completeness
-
-**Description:** `docs/ai_rag.md` says generated documents should be extracted, chunked, and embedded if searchable. The current implementation indexes generated Markdown content directly, which covers search, but does not run the same extraction path or record source chunk provenance.
-
-**Priority:** Low
-
-## 13. Database Indexes And Vector Index
-
-**Description:** `docs/data_model.md` specifies indexes for folders, documents, chunks, metadata, and an HNSW vector index when chunk count grows. The current SQLAlchemy model creates tables but does not define these indexes.
-
-**Priority:** Low
-
-## 14. Repository Layer And Module Separation
-
-**Description:** `docs/backend_api.md` describes repositories and modules for folders, metadata, embeddings, search, generation, lineage, and jobs. The current backend has thin routers and some services, but several documented modules are empty or absent as concrete implementations.
-
-**Priority:** Low
+일부 도메인 디렉터리는 비어 있습니다. 기능이 늘어나면 라우터, 서비스, 저장소 계층을 더 분리할 수 있습니다.
