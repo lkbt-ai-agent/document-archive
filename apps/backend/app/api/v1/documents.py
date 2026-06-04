@@ -4,15 +4,15 @@ import uuid
 import time
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.ai.providers import AIProviderRuntimeError
 from app.api.v1.schemas import DocumentChunkRead, DocumentRead
-from app.core.database import get_db
-from app.db.models import Document, DocumentChunk
+from app.core.database import SessionLocal, get_db
+from app.db.models import Document, DocumentChunk, ProcessingStatus
 from app.modules.documents.service import DocumentService
 from app.modules.extraction.service import SUPPORTED_EXTENSIONS
 from app.modules.storage.service import StorageService
@@ -21,8 +21,37 @@ from app.modules.storage.service import StorageService
 router = APIRouter(prefix="/documents", tags=["documents"])
 
 
+def process_uploaded_document_background(document_id: uuid.UUID, content: bytes, started_at: float) -> None:
+    db = SessionLocal()
+    try:
+        document = db.get(Document, document_id)
+        if not document:
+            return
+        document.processing_status = ProcessingStatus.processing
+        document.processing_error = None
+        db.flush()
+        DocumentService(db)._process_document(document, content)
+        document.upload_elapsed_seconds = round(time.perf_counter() - started_at, 3)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        try:
+            document = db.get(Document, document_id)
+            if document:
+                document.processing_status = ProcessingStatus.failed
+                document.processing_error = str(exc)
+                document.upload_elapsed_seconds = round(time.perf_counter() - started_at, 3)
+                db.commit()
+        except Exception:
+            db.rollback()
+            raise
+    finally:
+        db.close()
+
+
 @router.post("/upload", response_model=DocumentRead, status_code=status.HTTP_201_CREATED)
 async def upload_document(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     folder_id: uuid.UUID | None = Form(default=None),
     db: Session = Depends(get_db),
@@ -33,10 +62,10 @@ async def upload_document(
         raise HTTPException(status_code=415, detail="Unsupported file type. Supported types: jpg, png, webp, PDF, txt, md.")
     content = await file.read()
     try:
-        document = DocumentService(db).create_uploaded_document(folder_id, file.filename or "upload", file.content_type or "application/octet-stream", content)
-        document.upload_elapsed_seconds = round(time.perf_counter() - started_at, 3)
-        db.flush()
+        document = DocumentService(db).create_uploaded_document_record(folder_id, file.filename or "upload", file.content_type or "application/octet-stream", content)
+        db.commit()
         db.refresh(document)
+        background_tasks.add_task(process_uploaded_document_background, document.id, content, started_at)
         return document
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

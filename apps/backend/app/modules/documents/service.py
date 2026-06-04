@@ -29,6 +29,11 @@ class DocumentService:
         self.db = db
 
     def create_uploaded_document(self, folder_id: uuid.UUID | None, filename: str, mime_type: str, content: bytes) -> Document:
+        document = self.create_uploaded_document_record(folder_id, filename, mime_type, content)
+        self._process_document(document, content)
+        return document
+
+    def create_uploaded_document_record(self, folder_id: uuid.UUID | None, filename: str, mime_type: str, content: bytes) -> Document:
         if folder_id and not self.db.get(Folder, folder_id):
             raise ValueError("Folder not found.")
         document_id = uuid.uuid4()
@@ -47,7 +52,6 @@ class DocumentService:
         )
         self.db.add(document)
         self.db.flush()
-        self._process_document(document, content)
         return document
 
     def create_generated_document(

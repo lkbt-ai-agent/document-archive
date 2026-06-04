@@ -10,11 +10,19 @@ mkdir -p "$PID_DIR" "$LOG_DIR"
 
 start_service() {
   name=$1
-  workdir=$2
-  shift 2
+  port=$2
+  workdir=$3
+  shift 3
 
   pid_file="$PID_DIR/$name.pid"
   log_file="$LOG_DIR/$name.log"
+
+  if [ "$port" ] && lsof -tiTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "$name cannot start: port $port is already in use"
+    lsof -nP -iTCP:"$port" -sTCP:LISTEN || true
+    echo "Run ./stop_archive_services.sh, then retry."
+    return 1
+  fi
 
   if [ -f "$pid_file" ]; then
     pid=$(cat "$pid_file")
@@ -51,16 +59,19 @@ FRONTEND_PORT=${FRONTEND_PORT:-3000}
 BACKEND_HOST=${BACKEND_HOST:-0.0.0.0}
 BACKEND_PORT=${BACKEND_PORT:-8000}
 BACKEND_UVICORN=${BACKEND_UVICORN:-"$ROOT_DIR/apps/backend/.venv/bin/uvicorn"}
+LOCAL_AI_OCR_PORT=${LOCAL_AI_OCR_PORT:-8081}
+LOCAL_AI_EMBEDDING_PORT=${LOCAL_AI_EMBEDDING_PORT:-8082}
+LOCAL_AI_GENERATION_PORT=${LOCAL_AI_GENERATION_PORT:-8083}
 
 if [ ! -x "$BACKEND_UVICORN" ]; then
   BACKEND_UVICORN=uvicorn
 fi
 
-start_service backend "$ROOT_DIR/apps/backend" "$BACKEND_UVICORN" app.main:app --reload --host "$BACKEND_HOST" --port "$BACKEND_PORT"
-start_service frontend "$ROOT_DIR/apps/frontend" npm run dev -- --hostname "$FRONTEND_HOST" --port "$FRONTEND_PORT"
-start_service local-ai-ocr "$ROOT_DIR" "$PYTHON_BIN" scripts/start_local_ai_provider.py ocr
-start_service local-ai-embedding "$ROOT_DIR" "$PYTHON_BIN" scripts/start_local_ai_provider.py embedding
-start_service local-ai-generation "$ROOT_DIR" "$PYTHON_BIN" scripts/start_local_ai_provider.py generation
+start_service backend "$BACKEND_PORT" "$ROOT_DIR/apps/backend" "$BACKEND_UVICORN" app.main:app --reload --host "$BACKEND_HOST" --port "$BACKEND_PORT"
+start_service frontend "$FRONTEND_PORT" "$ROOT_DIR/apps/frontend" npm run dev -- --hostname "$FRONTEND_HOST" --port "$FRONTEND_PORT"
+start_service local-ai-ocr "$LOCAL_AI_OCR_PORT" "$ROOT_DIR" "$PYTHON_BIN" scripts/start_local_ai_provider.py ocr
+start_service local-ai-embedding "$LOCAL_AI_EMBEDDING_PORT" "$ROOT_DIR" "$PYTHON_BIN" scripts/start_local_ai_provider.py embedding
+start_service local-ai-generation "$LOCAL_AI_GENERATION_PORT" "$ROOT_DIR" "$PYTHON_BIN" scripts/start_local_ai_provider.py generation
 
 echo
 echo "All services requested."

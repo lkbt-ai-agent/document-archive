@@ -160,6 +160,11 @@ export function ArchiveShell() {
     [documents, searchDocuments, searchResults, selectedDocumentId],
   );
 
+  const hasProcessingDocuments = useMemo(
+    () => documents.some((document) => document.processing_status === "pending" || document.processing_status === "processing"),
+    [documents],
+  );
+
   async function refresh(folderId = selectedFolderId, preferredDocumentId?: string) {
     setError(null);
     const [nextFolders, nextDocuments] = await Promise.all([api.folders(), api.documents(folderId)]);
@@ -200,6 +205,31 @@ export function ArchiveShell() {
       ignore = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!hasProcessingDocuments) {
+      return;
+    }
+
+    let ignore = false;
+    const intervalId = window.setInterval(async () => {
+      try {
+        const nextDocuments = await api.documents(selectedFolderId);
+        if (ignore) return;
+        setDocuments(nextDocuments);
+        if (selectedDocumentId && !nextDocuments.some((document) => document.id === selectedDocumentId)) {
+          setSelectedDocumentId(nextDocuments[0]?.id ?? null);
+        }
+      } catch (pollError) {
+        if (!ignore) setError(pollError instanceof Error ? pollError.message : "문서 처리 상태를 갱신하지 못했습니다.");
+      }
+    }, 3000);
+
+    return () => {
+      ignore = true;
+      window.clearInterval(intervalId);
+    };
+  }, [hasProcessingDocuments, selectedFolderId, selectedDocumentId]);
 
   async function selectFolder(folderId: string | null, preferredDocumentId?: string) {
     setSelectedFolderId(folderId);
@@ -440,10 +470,10 @@ export function ArchiveShell() {
         />
       </SidebarProvider>
       <Toast open={Boolean(uploadToast)} onOpenChange={(open) => !open && setUploadToast(null)}>
-        <ToastTitle>업로드 완료</ToastTitle>
+        <ToastTitle>업로드 접수</ToastTitle>
         <ToastDescription>
           {uploadToast
-            ? `${uploadToast.documentName} 업로드가 ${formatElapsedSeconds(uploadToast.elapsedSeconds)}초 만에 완료되었습니다.`
+            ? `${uploadToast.documentName} 업로드가 접수되었습니다. 처리가 끝나면 상태가 갱신됩니다.`
             : ""}
         </ToastDescription>
       </Toast>
