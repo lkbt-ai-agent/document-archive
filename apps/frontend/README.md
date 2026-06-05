@@ -11,14 +11,23 @@ npm run dev
 ```
 
 - UI: `http://localhost:3000`
-- 외부 접속: `npm run dev -- --hostname 0.0.0.0`
 
 ## 설정
 
-- 기본 API: `/api/v1` same-origin 프록시 -> `127.0.0.1:8000`
+- 기본 API: `/api/v1`.
+- 기본 프록시: Next.js -> `127.0.0.1:8000`.
+- 프록시 이유: 브라우저에는 같은 origin만 노출하고, Next 서버가 백엔드로 전달해 CORS와 Tailscale 주소 차이를 줄임. (`127.0.0.1`: 같은 머신에서만 접속)
+- API override:
 
 ```bash
-NEXT_PUBLIC_BACKEND_API_URL=http://127.0.0.1:8000 npm run dev
+NEXT_PUBLIC_BACKEND_API_URL=http://host:8000 npm run dev
+```
+
+## 검증
+
+```bash
+npm run lint
+npm run build
 ```
 
 ## 구성
@@ -27,6 +36,7 @@ NEXT_PUBLIC_BACKEND_API_URL=http://127.0.0.1:8000 npm run dev
 - `components/archive-shell.tsx`: 화면 상태/동작.
 - `lib/api.ts`: FastAPI 클라이언트.
 - `components/ui/`: shadcn/Radix UI.
+- `AGENTS.md`: 프론트엔드 작업 지침.
 
 ## 주요 기능
 

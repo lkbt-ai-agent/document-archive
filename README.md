@@ -1,77 +1,45 @@
 # 문서 아카이브
 
+개인 문서 업로드, 검색, AI 문서 생성을 위한 로컬 우선 아카이브.
+
 ## 주요 스펙
+
 - Next.js
 - FastAPI
 - PostgreSQL/pgvector
-- MinIO
+- MinIO (or 로컬 스토리지)
 - llama.cpp 로컬 AI
 
-## 실행
+## 구조
 
-### 백엔드
+- `apps/backend`: FastAPI API.
+- `apps/frontend`: Next.js UI.
+- `architecture`: 설계 문서.
+- `plan`: 작업 계획.
+- `config`: AI provider 설정.
+- `scripts`: 로컬 AI 실행/점검 스크립트.
 
-```bash
-cd apps/backend
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
-```
+## 사전 조건
 
-- API: `http://127.0.0.1:8000/api/v1`
-- 문서: `http://127.0.0.1:8000/docs`
+- Python
+- Node.js/npm
+- PostgreSQL + pgvector
+- llama.cpp
+- 선택: MinIO
 
-외부 기기에서 백엔드 문서를 직접 열 때:
+## 빠른 시작
 
-```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-### 프론트엔드
-
-```bash
-cd apps/frontend
-npm install
-npm run dev
-```
-
-- UI: `http://localhost:3000`
-- 기본 API: `/api/v1` -> Next.js 프록시 -> `127.0.0.1:8000`
-- API 변경: `NEXT_PUBLIC_BACKEND_API_URL=http://host:port npm run dev`
-
-외부 기기에서 UI 접속:
-
-```bash
-npm run dev -- --hostname 0.0.0.0
-```
-
-이 경우 브라우저는 프론트엔드의 `/api/v1`만 호출하고, Next.js가 같은 머신의 백엔드로 전달함.
+1. DB 준비.
+2. `apps/backend/.env` 작성.
+3. 필요 시 `.env.local-ai` 작성.
+4. 백엔드 실행: [apps/backend/README.md](apps/backend/README.md).
+5. 프론트엔드 실행: [apps/frontend/README.md](apps/frontend/README.md).
 
 ## 설정
 
-- 백엔드: `apps/backend/.env` 또는 환경변수.
-- 예시: `apps/backend/.env.example`.
-- 필수: `DATABASE_URL`.
-- 선택 MinIO: `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET`.
-- 저장소: 기본 `apps/backend/.data/uploads`; 변경 `LOCAL_STORAGE_DIR`.
-- 저장소 모드: `OBJECT_STORAGE_BACKEND=local|minio`.
+- 백엔드: `apps/backend/.env`, 예시 `apps/backend/.env.example`.
 - 로컬 AI: `.env.local-ai`, 예시 `.env.local-ai.example`.
 - AI 매핑: `config/ai_providers.json`.
-
-주요 로컬 AI 값:
-
-- `LLAMA_CPP_SERVER_BIN`
-- `LLAMA_CPP_OCR_BASE_URL`, `LOCAL_AI_OCR_MODEL_PATH`, `LOCAL_AI_OCR_MMPROJ_PATH`
-- `LLAMA_CPP_EMBEDDING_BASE_URL`, `LOCAL_AI_EMBEDDING_MODEL_PATH`
-- `LLAMA_CPP_GENERATION_BASE_URL`, `LOCAL_AI_GENERATION_MODEL_PATH`
-
-```bash
-python3 scripts/start_local_ai_provider.py ocr
-python3 scripts/start_local_ai_provider.py embedding
-python3 scripts/start_local_ai_provider.py generation
-python3 scripts/local_ai_health_check.py
-```
 
 ## 기능
 
@@ -81,4 +49,9 @@ python3 scripts/local_ai_health_check.py
 - 키워드 검색과 의미 검색.
 - 요약, 초안, 보고서, 문체 변경, 문서 병합.
 
-구조: [architecture/architecture.md](architecture/architecture.md).
+## 문서
+
+- [아키텍처](architecture/architecture.md)
+- [백엔드와 API](architecture/backend_api.md)
+- [로컬 AI 모델](architecture/local_ai_models.md)
+- [스토리지와 인프라](architecture/storage_infra.md)

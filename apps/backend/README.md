@@ -2,6 +2,22 @@
 
 FastAPI 문서 아카이브 API.
 
+## 설정
+
+```bash
+cp .env.example .env
+```
+
+- 필수: `DATABASE_URL`.
+- 선택 MinIO: `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET`.
+- 저장소 모드: `OBJECT_STORAGE_BACKEND=local|minio`.
+- 로컬 저장 기본값: `apps/backend/.data/uploads`.
+- 저장 위치 변경: `LOCAL_STORAGE_DIR`.
+- 로컬 AI 파일: 루트 `.env.local-ai`.
+- AI 매핑: `../../config/ai_providers.json`.
+- 임베딩 차원 변경 시 `LOCAL_AI_EMBEDDING_DIMENSION`과 DB 모델을 함께 맞춤.
+- 시작 시 pgvector 확장과 SQLAlchemy 테이블 생성.
+
 ## 실행
 
 ```bash
@@ -12,16 +28,35 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-- 상태 확인: `GET /health`
+UI 를 거치지 않고 외부 기기에서 API 문서를 직접 열 때:
+
+```bash
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+- `127.0.0.1`: 같은 머신에서만 접속.
+- `0.0.0.0`: LAN/Tailscale 포함 모든 인터페이스에서 접속 허용.
+- 외부 UI만 쓸 때는 백엔드를 `127.0.0.1:8000`으로 두고, 프론트엔드 프록시를 통해 접근해도 됨.
+
+## 검증
+
+- 상태: `GET /health`
 - 문서: `http://127.0.0.1:8000/docs`
 - 접두사: `/api/v1`
+- 프론트엔드는 `/api/v1` 프록시를 사용해 브라우저에 백엔드 주소를 직접 노출하지 않고, Tailscale/외부 접속에서도 같은 origin으로 API를 호출함.
 
-## 설정
+```bash
+cd ../..
+python3 scripts/local_ai_health_check.py
+```
 
-- `.env`: DB, MinIO.
-- `.env.local-ai`: llama.cpp URL/모델.
-- `../../config/ai_providers.json`: OCR/embedding/generation 매핑.
-- 시작 시 pgvector 확장과 SQLAlchemy 테이블 생성.
+## 구조
+
+- `app/main.py`: 앱 진입점.
+- `app/api/v1`: API 라우터.
+- `app/modules`: 도메인 서비스.
+- `app/ai`: AI provider.
+- `app/db/models.py`: SQLAlchemy 모델.
 
 ## 주요 기능
 
