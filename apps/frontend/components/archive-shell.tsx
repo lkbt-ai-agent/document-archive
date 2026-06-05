@@ -397,7 +397,7 @@ export function ArchiveShell() {
           selectedFolderId && isFolderOrDescendantOf(selectedFolderId, deleteDialog.folder.id, folders) ? null : selectedFolderId;
         setSelectedFolderId(nextFolderId);
         await refresh(nextFolderId);
-        setFolders((current) => current.filter((folder) => folder.id !== deleteDialog.folder.id));
+        setFolders((current) => removeFolderSubtreeFromList(current, deleteDialog.folder.id));
       } else {
         await api.deleteDocument(deleteDialog.document.id);
         await refresh(selectedFolderId);
@@ -2624,6 +2624,10 @@ function isFolderOrDescendantOf(folderId: string, ancestorFolderId: string, fold
   }
 
   return false;
+}
+
+function removeFolderSubtreeFromList(folders: FolderType[], deletedFolderId: string) {
+  return folders.filter((folder) => !isFolderOrDescendantOf(folder.id, deletedFolderId, folders));
 }
 
 function mergeFolderIntoList(folders: FolderType[], folder: FolderType) {
