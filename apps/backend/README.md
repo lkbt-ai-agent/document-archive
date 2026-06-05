@@ -32,21 +32,13 @@ uvicorn app.main:app --reload --port 8000
 
 로컬 LLM 제공자는 로그를 따로 보기 위해 각각 별도 shell에서 실행합니다. 아래 명령은 프로젝트 루트에서 실행합니다.
 
-OCR 모델:
 
 ```bash
+# OCR 모델
 python3 scripts/start_local_ai_provider.py ocr
-```
-
-임베딩 모델:
-
-```bash
+# 임베딩 모델
 python3 scripts/start_local_ai_provider.py embedding
-```
-
-문서 생성/요약 모델:
-
-```bash
+# 문서 생성/요약 모델:
 python3 scripts/start_local_ai_provider.py generation
 ```
 
