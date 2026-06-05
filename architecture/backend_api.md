@@ -15,11 +15,15 @@ apps/backend/app/
   ai/{providers,llama_cpp_provider}.py
 ```
 
+시작 시 `.env`와 `.env.local-ai`를 읽고, PostgreSQL pgvector 확장과 SQLAlchemy 테이블을 준비합니다.
+
 ## 라우터
 
 ### 공통
 
 - `GET /health`: 상태 확인.
+
+기본 CORS 허용 origin은 `http://localhost:3000`, `http://127.0.0.1:3000`입니다. `BACKEND_CORS_ORIGINS`로 추가할 수 있고, Tailscale `*.ts.net:3000` 개발 origin도 정규식으로 허용합니다.
 
 ### 폴더
 
@@ -30,7 +34,7 @@ apps/backend/app/
 
 ### 문서
 
-- `POST /api/v1/documents/upload`: 파일 업로드와 동기 처리.
+- `POST /api/v1/documents/upload`: 원본 저장 후 `processing` 문서 반환. 실제 처리는 `BackgroundTasks`.
 - `GET /api/v1/documents?root_only=true`: 루트 문서 목록.
 - `GET /api/v1/documents?folder_id={id}`: 폴더 문서 목록.
 - `GET /api/v1/documents/{document_id}`: 문서 상세.
@@ -59,20 +63,23 @@ apps/backend/app/
 - `POST /api/v1/ai-actions/merge-documents`
 - `GET /api/v1/ai-actions/{generated_document_id}/lineage`
 
-AI 작업은 출처 문서의 청크 텍스트를 모아 generation 제공자에 전달하고, 결과를 생성 문서로 저장합니다.
+AI 작업은 먼저 빈 생성 문서를 만들고 `BackgroundTasks`에서 완료합니다. 출처 문서의 청크 텍스트를 모아 generation 제공자에 전달하고, 결과를 생성 문서로 저장합니다. 계보 API는 출처 문서 ID, 출처 청크 ID, 작업, 프롬프트, 모델, 제공자, 파라미터를 반환합니다.
 
 ## 처리 방식
 
-업로드는 요청 안에서 끝까지 처리합니다.
+업로드 API는 요청 안에서 원본 저장과 `Document` 레코드 생성까지만 처리합니다.
 
 ```text
 upload
   -> save original
-  -> extract text
-  -> generate metadata
-  -> chunk text
-  -> embed chunks
-  -> mark ready
+  -> create Document(processing)
+  -> return 201
+  -> BackgroundTasks:
+       extract text
+       generate metadata
+       chunk text
+       embed chunks
+       mark ready or failed
 ```
 
-실패하면 `processing_status=failed`와 `processing_error`를 저장하고 요청은 오류를 반환합니다.
+확장자 오류는 `415`, 없는 폴더는 `404`를 반환합니다. 백그라운드 처리 실패는 이미 반환된 응답을 바꾸지 않고 `processing_status=failed`, `processing_error`, `upload_elapsed_seconds`를 저장합니다.

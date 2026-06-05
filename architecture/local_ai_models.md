@@ -10,6 +10,8 @@
 | `embedding` | `8082` | `BGE-M3` | 청크/검색어 임베딩 |
 | `generation` | `8083` | `Qwen3-14B` | 메타데이터, 요약, 생성 |
 
+모델명과 base URL은 `config/ai_providers.json`의 역할별 env 키로 읽습니다. 역할별 URL이 없으면 `LLAMA_CPP_BASE_URL`을 fallback으로 씁니다.
+
 ## 환경변수
 
 `.env.local-ai`가 있으면 백엔드와 스크립트가 자동으로 읽습니다.
@@ -25,22 +27,42 @@ LOCAL_AI_EMBEDDING_MODEL_PATH=/absolute/path/to/embedding.gguf
 LOCAL_AI_GENERATION_MODEL_PATH=/absolute/path/to/generation.gguf
 ```
 
-generation 서버의 기본 컨텍스트는 `8192`입니다. 더 크게 실행하려면 다음처럼 환경변수로 지정합니다.
+## 서버 컨텍스트
+
+`scripts/start_local_ai_provider.py`는 llama-server를 다음 기본 컨텍스트로 실행합니다.
+
+- `generation`: `8192`
+- `ocr`: `4096`
+- `embedding`: `4096`
+
+역할별로 바꾸려면 다음 값을 설정합니다.
 
 ```bash
+LOCAL_AI_OCR_CTX_SIZE=4096
+LOCAL_AI_EMBEDDING_CTX_SIZE=4096
 LOCAL_AI_GENERATION_CTX_SIZE=8192
 ```
 
-이 값은 generation 서버를 다시 시작해야 적용됩니다.
+이 값은 해당 llama-server를 다시 시작해야 적용됩니다. 생성 중 context 초과가 나면 백엔드는 입력 글자 수와 `max_tokens`를 줄여 재시도하고, 그래도 실패하면 `LOCAL_AI_GENERATION_CTX_SIZE` 확대를 안내합니다.
 
-임베딩 서버가 배치 크기 오류를 내면 다음 값을 조정합니다.
+## 임베딩 배치
+
+백엔드 요청 배치는 기본 1개입니다.
 
 ```bash
 LOCAL_AI_EMBEDDING_REQUEST_BATCH_SIZE=1
+```
+
+llama-server 실행 배치가 필요하면 다음 값을 조정합니다.
+
+```bash
 LOCAL_AI_EMBEDDING_BATCH_SIZE=512
 LOCAL_AI_EMBEDDING_UBATCH_SIZE=512
+LOCAL_AI_EMBEDDING_POOLING=mean
 LOCAL_AI_EMBEDDING_DIMENSION=1024
 ```
+
+`LOCAL_AI_EMBEDDING_DIMENSION`을 바꾸면 백엔드 설정만으로는 부족합니다. 현재 DB 모델의 `DocumentChunk.embedding`은 `Vector(1024)`입니다.
 
 ## 시작
 
@@ -55,6 +77,8 @@ python3 scripts/start_local_ai_provider.py generation
 ```bash
 python3 scripts/start_local_ai_provider.py generation --print-only
 ```
+
+전체 서비스 스크립트는 기본 포트 `8081`, `8082`, `8083`으로 세 제공자를 시작합니다.
 
 ## 점검
 
