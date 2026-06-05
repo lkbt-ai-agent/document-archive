@@ -321,9 +321,7 @@ export function ArchiveShell() {
       setError(null);
       if (folderDialog.mode === "create") {
         const folder = await api.createFolder(name.trim(), folderDialog.parentId);
-        await refresh(folder.id);
         setFolders((current) => mergeFolderIntoList(current, folder));
-        setSelectedFolderId(folder.id);
       } else {
         const folder = await api.updateFolder(folderDialog.folder.id, { name: name.trim() });
         await refresh(selectedFolderId);

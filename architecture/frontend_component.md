@@ -1,4 +1,4 @@
-# 프론트엔드 UI
+# 프론트엔드 Component
 
 ## Dialog 성능 원칙
 
