@@ -15,11 +15,13 @@ AI 호출은 `apps/backend/app/ai/providers.py`의 제공자 인터페이스와 
 ```text
 file upload
   -> local/MinIO 저장
+  -> Document processing 반환
+  -> BackgroundTasks
   -> PDF/text/image 텍스트 추출
   -> generation 제공자로 JSON 메타데이터 생성
   -> 360자 청크 생성
   -> embedding 제공자로 청크 임베딩
-  -> Document ready
+  -> Document ready 또는 failed
 ```
 
 PDF는 `pypdf` 텍스트 추출만 사용합니다. 스캔 PDF용 OCR fallback은 아직 없습니다.
@@ -58,4 +60,4 @@ AI 작업은 선택한 출처 문서의 청크 텍스트를 작업별 한도 안
 
 `POST /api/v1/search/rag`는 구현되어 있습니다. 질문을 임베딩하고 관련 청크를 찾은 뒤, 제공된 청크만 근거로 한국어 답변을 생성합니다. 응답에는 답변과 인용 청크 목록이 포함됩니다.
 
-프론트엔드 RAG 답변 화면은 아직 없습니다.
+프론트엔드는 검색 메뉴의 `RAG 답변` 모드로 이 API를 호출하고, 답변, 인용 수, 소요 시간, 인용 청크를 표시합니다.
