@@ -33,11 +33,11 @@ Next.js UI
 
 ## 문서
 
-- [백엔드와 API](docs/backend_api.md)
-- [데이터 모델](docs/data_model.md)
-- [AI와 RAG](docs/ai_rag.md)
-- [로컬 AI 모델](docs/local_ai_models.md)
-- [스토리지와 인프라](docs/storage_infra.md)
+- [백엔드와 API](backend_api.md)
+- [데이터 모델](data_model.md)
+- [AI와 RAG](ai_rag.md)
+- [로컬 AI 모델](local_ai_models.md)
+- [스토리지와 인프라](storage_infra.md)
 
 ## 비목표
 
