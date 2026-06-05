@@ -1175,7 +1175,7 @@ function MoveFolderDialog({
 
   return (
     <Dialog open={Boolean(state)} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>폴더 이동</DialogTitle>
           <DialogDescription>
@@ -1215,8 +1215,8 @@ function MoveFolderFields({
   const isSameParent = targetParentId === movingFolder.parent_id;
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-1">
+    <div className="flex min-h-0 flex-col gap-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-1">
         <MoveTargetButton
           active={targetParentId === null}
           disabled={false}
@@ -1225,7 +1225,7 @@ function MoveFolderFields({
           description="최상위 위치"
           onClick={() => setTargetParentId(null)}
         />
-        <ScrollArea className="max-h-[min(420px,60vh)] rounded-md border">
+        <ScrollArea className="min-h-0 flex-1 rounded-md border">
           <div className="p-0.5">
             {tree.map((node) => (
               <MoveFolderTreeItem
