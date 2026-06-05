@@ -20,6 +20,8 @@ cp .env.example .env
 
 ## 실행
 
+백엔드:
+
 ```bash
 cd apps/backend
 python3 -m venv .venv
@@ -27,6 +29,28 @@ python3 -m venv .venv
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
+
+로컬 LLM 제공자는 로그를 따로 보기 위해 각각 별도 shell에서 실행합니다. 아래 명령은 프로젝트 루트에서 실행합니다.
+
+OCR 모델:
+
+```bash
+python3 scripts/start_local_ai_provider.py ocr
+```
+
+임베딩 모델:
+
+```bash
+python3 scripts/start_local_ai_provider.py embedding
+```
+
+문서 생성/요약 모델:
+
+```bash
+python3 scripts/start_local_ai_provider.py generation
+```
+
+기본 포트는 OCR `8081`, 임베딩 `8082`, 생성 `8083`입니다. 실행 전 루트 `.env.local-ai`에 `LLAMA_CPP_SERVER_BIN`, 역할별 모델 경로, 역할별 base URL이 설정되어 있어야 합니다.
 
 UI 를 거치지 않고 외부 기기에서 API 문서를 직접 열 때:
 

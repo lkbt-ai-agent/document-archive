@@ -14,6 +14,7 @@ import {
   FileText,
   FileType,
   Folder,
+  FolderInput,
   FolderOpen,
   FolderPen,
   FolderPlus,
@@ -101,6 +102,8 @@ type FolderDialogState =
   | { mode: "create"; parentId: string | null }
   | { mode: "rename"; folder: FolderType }
   | null;
+type FolderMoveDialogState = { folder: FolderType } | null;
+type DocumentMoveDialogState = { document: ArchiveDocument } | null;
 type DeleteDialogState =
   | { type: "folder"; folder: FolderType }
   | { type: "document"; document: ArchiveDocument }
@@ -146,6 +149,8 @@ export function ArchiveShell() {
   const [error, setError] = useState<string | null>(null);
   const [aiAction, setAiAction] = useState<AIAction | null>(null);
   const [folderDialog, setFolderDialog] = useState<FolderDialogState>(null);
+  const [folderMoveDialog, setFolderMoveDialog] = useState<FolderMoveDialogState>(null);
+  const [documentMoveDialog, setDocumentMoveDialog] = useState<DocumentMoveDialogState>(null);
   const [deleteDialog, setDeleteDialog] = useState<DeleteDialogState>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [uploadToast, setUploadToast] = useState<{ documentName: string; elapsedSeconds: number } | null>(null);
@@ -333,6 +338,56 @@ export function ArchiveShell() {
     }
   }
 
+  async function moveFolder(folder: FolderType, parentId: string | null) {
+    try {
+      setBusy(true);
+      setError(null);
+      const movedFolder = await api.updateFolder(folder.id, { parent_id: parentId });
+      const nextSelectedFolderId = selectedFolderId;
+      await refresh(nextSelectedFolderId);
+      setFolders((current) => mergeFolderIntoList(current, movedFolder));
+      setSelectedFolderId(nextSelectedFolderId);
+      setFolderMoveDialog(null);
+      setSearchResults(null);
+      setRagResponse(null);
+      setRagElapsedSeconds(null);
+      setSearchMode(null);
+      setSearchDocuments([]);
+    } catch (folderError) {
+      setError(folderError instanceof Error ? folderError.message : "폴더를 이동하지 못했습니다.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function moveDocument(document: ArchiveDocument, folderId: string | null) {
+    try {
+      setBusy(true);
+      setError(null);
+      const movedDocument = await api.updateDocument(document.id, { folder_id: folderId });
+      const [nextFolders, nextDocuments] = await Promise.all([api.folders(), api.documents(selectedFolderId)]);
+      setFolders(nextFolders);
+      setDocuments(nextDocuments);
+      setSelectedDocumentId((currentSelectedDocumentId) => {
+        if (movedDocument.folder_id === selectedFolderId) return movedDocument.id;
+        if (currentSelectedDocumentId === movedDocument.id) return nextDocuments[0]?.id ?? null;
+        return currentSelectedDocumentId && nextDocuments.some((item) => item.id === currentSelectedDocumentId)
+          ? currentSelectedDocumentId
+          : nextDocuments[0]?.id ?? null;
+      });
+      setDocumentMoveDialog(null);
+      setSearchResults(null);
+      setRagResponse(null);
+      setRagElapsedSeconds(null);
+      setSearchMode(null);
+      setSearchDocuments([]);
+    } catch (documentError) {
+      setError(documentError instanceof Error ? documentError.message : "문서를 이동하지 못했습니다.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function deleteSelectedItem() {
     if (!deleteDialog) return;
     try {
@@ -341,7 +396,7 @@ export function ArchiveShell() {
       if (deleteDialog.type === "folder") {
         await api.deleteFolder(deleteDialog.folder.id);
         const nextFolderId =
-          selectedFolderId && isFolderOrDescendant(selectedFolderId, deleteDialog.folder, folders) ? null : selectedFolderId;
+          selectedFolderId && isFolderOrDescendantOf(selectedFolderId, deleteDialog.folder.id, folders) ? null : selectedFolderId;
         setSelectedFolderId(nextFolderId);
         await refresh(nextFolderId);
         setFolders((current) => current.filter((folder) => folder.id !== deleteDialog.folder.id));
@@ -479,6 +534,7 @@ export function ArchiveShell() {
           onSelectFolder={selectFolder}
           onCreateFolder={(parentId) => setFolderDialog({ mode: "create", parentId })}
           onDeleteFolder={(folder) => setDeleteDialog({ type: "folder", folder })}
+          onMoveFolder={(folder) => setFolderMoveDialog({ folder })}
           onRenameFolder={(folder) => setFolderDialog({ mode: "rename", folder })}
           onShowFolderContextMenu={(folder, x, y) => setContextMenu({ type: "folder", folder, x, y })}
           onUpload={() => fileInputRef.current?.click()}
@@ -506,8 +562,12 @@ export function ArchiveShell() {
             setSearchMode(null);
             setSearchDocuments([]);
           }}
-          onCreateFolder={() => setFolderDialog({ mode: "create", parentId: selectedFolderId })}
+          onCreateFolder={(parentId) => setFolderDialog({ mode: "create", parentId })}
+          onDeleteFolder={(folder) => setDeleteDialog({ type: "folder", folder })}
           onDeleteDocument={(document) => setDeleteDialog({ type: "document", document })}
+          onMoveDocument={(document) => setDocumentMoveDialog({ document })}
+          onMoveFolder={(folder) => setFolderMoveDialog({ folder })}
+          onRenameFolder={(folder) => setFolderDialog({ mode: "rename", folder })}
           onRunSearch={runSearch}
           onSearchQueryChange={setSearchQuery}
           onSelectDocument={setSelectedDocumentId}
@@ -538,6 +598,20 @@ export function ArchiveShell() {
           onClose={() => setFolderDialog(null)}
           onSubmit={saveFolder}
         />
+        <MoveFolderDialog
+          busy={busy}
+          folders={folders}
+          state={folderMoveDialog}
+          onClose={() => setFolderMoveDialog(null)}
+          onSubmit={moveFolder}
+        />
+        <MoveDocumentDialog
+          busy={busy}
+          folders={folders}
+          state={documentMoveDialog}
+          onClose={() => setDocumentMoveDialog(null)}
+          onSubmit={moveDocument}
+        />
         <DeleteConfirmDialog
           busy={busy}
           state={deleteDialog}
@@ -548,6 +622,8 @@ export function ArchiveShell() {
           state={contextMenu}
           onClose={() => setContextMenu(null)}
           onCreateFolder={(parentId) => setFolderDialog({ mode: "create", parentId })}
+          onMoveFolder={(folder) => setFolderMoveDialog({ folder })}
+          onMoveDocument={(document) => setDocumentMoveDialog({ document })}
           onRenameFolder={(folder) => setFolderDialog({ mode: "rename", folder })}
           onDeleteFolder={(folder) => setDeleteDialog({ type: "folder", folder })}
           onDeleteDocument={(document) => setDeleteDialog({ type: "document", document })}
@@ -591,7 +667,11 @@ function ArchiveWorkspace({
   onAction,
   onClearSearch,
   onCreateFolder,
+  onDeleteFolder,
   onDeleteDocument,
+  onMoveDocument,
+  onMoveFolder,
+  onRenameFolder,
   onRunSearch,
   onSearchQueryChange,
   onGoToDocumentFolder,
@@ -615,8 +695,12 @@ function ArchiveWorkspace({
   selectedFolderId: string | null;
   onAction: (action: AIAction) => void;
   onClearSearch: () => void;
-  onCreateFolder: () => void;
+  onCreateFolder: (parentId: string | null) => void;
+  onDeleteFolder: (folder: FolderType) => void;
   onDeleteDocument: (document: ArchiveDocument) => void;
+  onMoveDocument: (document: ArchiveDocument) => void;
+  onMoveFolder: (folder: FolderType) => void;
+  onRenameFolder: (folder: FolderType) => void;
   onRunSearch: (mode: SearchMode) => void;
   onSearchQueryChange: (query: string) => void;
   onGoToDocumentFolder: (document: ArchiveDocument) => void;
@@ -742,7 +826,7 @@ function ArchiveWorkspace({
                     size="icon-sm"
                     className="w-full md:w-8"
                     aria-label="새 폴더"
-                    onClick={onCreateFolder}
+                    onClick={() => onCreateFolder(selectedFolderId)}
                     disabled={busy}
                   >
                     <FolderPlus className="size-4" />
@@ -777,7 +861,15 @@ function ArchiveWorkspace({
                 {childFolders.length > 0 && (
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                     {childFolders.map((folder) => (
-                      <FolderContentCard key={folder.id} folder={folder} onOpen={() => onSelectFolder(folder.id)} />
+                      <FolderContentCard
+                        key={folder.id}
+                        folder={folder}
+                        onCreateFolder={() => onCreateFolder(folder.id)}
+                        onDeleteFolder={() => onDeleteFolder(folder)}
+                        onMoveFolder={() => onMoveFolder(folder)}
+                        onOpen={() => onSelectFolder(folder.id)}
+                        onRenameFolder={() => onRenameFolder(folder)}
+                      />
                     ))}
                   </div>
                 )}
@@ -810,6 +902,7 @@ function ArchiveWorkspace({
                           searchMode={searchMode}
                           onDelete={() => onDeleteDocument(document)}
                           onGoToFolder={() => onGoToDocumentFolder(document)}
+                          onMove={() => onMoveDocument(document)}
                           onOpen={() => window.open(api.viewUrl(document.id), "_blank", "noreferrer")}
                           onShowContextMenu={(x, y) => onShowDocumentContextMenu(document, x, y)}
                           selected={selectedDocument?.id === document.id}
@@ -903,22 +996,84 @@ function HeaderTooltip({
   );
 }
 
-function FolderContentCard({ folder, onOpen }: { folder: FolderType; onOpen: () => void }) {
+function FolderContentCard({
+  folder,
+  onCreateFolder,
+  onDeleteFolder,
+  onMoveFolder,
+  onOpen,
+  onRenameFolder,
+}: {
+  folder: FolderType;
+  onCreateFolder: () => void;
+  onDeleteFolder: () => void;
+  onMoveFolder: () => void;
+  onOpen: () => void;
+  onRenameFolder: () => void;
+}) {
   return (
-    <button
-      type="button"
-      className="flex min-w-0 items-center gap-3 rounded-md border bg-card px-3 py-3 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      onClick={onOpen}
-    >
-      <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-amber-50 text-amber-700 ring-1 ring-amber-200">
-        <Folder className="size-4" />
-      </div>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium">{folder.name}</span>
-        <span className="block truncate text-xs text-muted-foreground">{folder.path ?? "폴더"}</span>
-      </span>
-      <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-    </button>
+    <div className="flex min-w-0 items-center gap-2 rounded-md border bg-card px-3 py-3 transition-colors hover:bg-accent">
+      <button
+        type="button"
+        className="flex min-w-0 flex-1 items-center gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        onClick={onOpen}
+      >
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-amber-50 text-amber-700 ring-1 ring-amber-200">
+          <Folder className="size-4" />
+        </div>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium">{folder.name}</span>
+          <span className="block truncate text-xs text-muted-foreground">{folder.path ?? "폴더"}</span>
+        </span>
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+      </button>
+      <FolderCardMenu
+        folder={folder}
+        onCreateFolder={onCreateFolder}
+        onDeleteFolder={onDeleteFolder}
+        onMoveFolder={onMoveFolder}
+        onRenameFolder={onRenameFolder}
+      />
+    </div>
+  );
+}
+
+function FolderCardMenu({
+  folder,
+  onCreateFolder,
+  onDeleteFolder,
+  onMoveFolder,
+  onRenameFolder,
+}: {
+  folder: FolderType;
+  onCreateFolder: () => void;
+  onDeleteFolder: () => void;
+  onMoveFolder: () => void;
+  onRenameFolder: () => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          className="shrink-0"
+          aria-label={`${folder.name} 작업`}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <MoreHorizontal className="size-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-44">
+        <FolderActionItems
+          onCreateFolder={onCreateFolder}
+          onDeleteFolder={onDeleteFolder}
+          onMoveFolder={onMoveFolder}
+          onRenameFolder={onRenameFolder}
+        />
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -1003,6 +1158,311 @@ function FolderFormFields({
   );
 }
 
+function MoveFolderDialog({
+  busy,
+  folders,
+  state,
+  onClose,
+  onSubmit,
+}: {
+  busy: boolean;
+  folders: FolderType[];
+  state: FolderMoveDialogState;
+  onClose: () => void;
+  onSubmit: (folder: FolderType, parentId: string | null) => void;
+}) {
+  const movingFolder = state?.folder ?? null;
+
+  return (
+    <Dialog open={Boolean(state)} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>폴더 이동</DialogTitle>
+          <DialogDescription>
+            {movingFolder ? `${movingFolder.name} 폴더를 이동할 위치를 선택합니다.` : "폴더를 이동할 위치를 선택합니다."}
+          </DialogDescription>
+        </DialogHeader>
+        {movingFolder && (
+          <MoveFolderFields
+            key={`${movingFolder.id}-${movingFolder.parent_id ?? "root"}`}
+            busy={busy}
+            folders={folders}
+            movingFolder={movingFolder}
+            onClose={onClose}
+            onSubmit={onSubmit}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function MoveFolderFields({
+  busy,
+  folders,
+  movingFolder,
+  onClose,
+  onSubmit,
+}: {
+  busy: boolean;
+  folders: FolderType[];
+  movingFolder: FolderType;
+  onClose: () => void;
+  onSubmit: (folder: FolderType, parentId: string | null) => void;
+}) {
+  const [targetParentId, setTargetParentId] = useState<string | null>(movingFolder.parent_id);
+  const tree = useMemo(() => buildFolderTree(folders), [folders]);
+  const isSameParent = targetParentId === movingFolder.parent_id;
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-1">
+        <MoveTargetButton
+          active={targetParentId === null}
+          disabled={false}
+          icon={HardDrive}
+          label="내 드라이브"
+          description="최상위 위치"
+          onClick={() => setTargetParentId(null)}
+        />
+        <ScrollArea className="max-h-[min(420px,60vh)] rounded-md border">
+          <div className="p-0.5">
+            {tree.map((node) => (
+              <MoveFolderTreeItem
+                key={node.folder.id}
+                node={node}
+                movingFolderId={movingFolder.id}
+                folders={folders}
+                targetParentId={targetParentId}
+                onSelect={setTargetParentId}
+              />
+            ))}
+          </div>
+        </ScrollArea>
+      </div>
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
+          취소
+        </Button>
+        <Button type="button" disabled={busy || isSameParent} onClick={() => onSubmit(movingFolder, targetParentId)}>
+          {busy ? <Loader2 className="size-4 animate-spin" /> : <FolderInput className="size-4" />}
+          이동
+        </Button>
+      </DialogFooter>
+    </div>
+  );
+}
+
+function MoveFolderTreeItem({
+  folders,
+  movingFolderId,
+  node,
+  targetParentId,
+  onSelect,
+}: {
+  folders: FolderType[];
+  movingFolderId: string;
+  node: FolderTreeNode;
+  targetParentId: string | null;
+  onSelect: (folderId: string) => void;
+}) {
+  const disabled = isFolderOrDescendantOf(node.folder.id, movingFolderId, folders);
+
+  return (
+    <>
+      <MoveTargetButton
+        active={targetParentId === node.folder.id}
+        disabled={disabled}
+        icon={Folder}
+        label={node.folder.name}
+        description={disabled ? "선택할 수 없음" : (node.folder.path ?? node.folder.name)}
+        style={{ paddingLeft: `${0.75 + node.depth * 0.85}rem` }}
+        onClick={() => onSelect(node.folder.id)}
+      />
+      {node.children.map((child) => (
+        <MoveFolderTreeItem
+          key={child.folder.id}
+          node={child}
+          movingFolderId={movingFolderId}
+          folders={folders}
+          targetParentId={targetParentId}
+          onSelect={onSelect}
+        />
+      ))}
+    </>
+  );
+}
+
+function MoveDocumentDialog({
+  busy,
+  folders,
+  state,
+  onClose,
+  onSubmit,
+}: {
+  busy: boolean;
+  folders: FolderType[];
+  state: DocumentMoveDialogState;
+  onClose: () => void;
+  onSubmit: (document: ArchiveDocument, folderId: string | null) => void;
+}) {
+  const movingDocument = state?.document ?? null;
+
+  return (
+    <Dialog open={Boolean(state)} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>문서 이동</DialogTitle>
+          <DialogDescription>
+            {movingDocument ? `${documentDisplayName(movingDocument)} 문서를 이동할 위치를 선택합니다.` : "문서를 이동할 위치를 선택합니다."}
+          </DialogDescription>
+        </DialogHeader>
+        {movingDocument && (
+          <MoveDocumentFields
+            key={`${movingDocument.id}-${movingDocument.folder_id ?? "root"}`}
+            busy={busy}
+            folders={folders}
+            movingDocument={movingDocument}
+            onClose={onClose}
+            onSubmit={onSubmit}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function MoveDocumentFields({
+  busy,
+  folders,
+  movingDocument,
+  onClose,
+  onSubmit,
+}: {
+  busy: boolean;
+  folders: FolderType[];
+  movingDocument: ArchiveDocument;
+  onClose: () => void;
+  onSubmit: (document: ArchiveDocument, folderId: string | null) => void;
+}) {
+  const [targetFolderId, setTargetFolderId] = useState<string | null>(movingDocument.folder_id);
+  const tree = useMemo(() => buildFolderTree(folders), [folders]);
+  const isSameFolder = targetFolderId === movingDocument.folder_id;
+  const isProcessing = isProcessingDocument(movingDocument);
+
+  return (
+    <div className="space-y-4">
+      {isProcessing && (
+        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          처리 중인 문서는 이동할 수 없습니다.
+        </p>
+      )}
+      <div className="space-y-1">
+        <MoveTargetButton
+          active={targetFolderId === null}
+          disabled={false}
+          icon={HardDrive}
+          label="내 드라이브"
+          description="최상위 위치"
+          onClick={() => setTargetFolderId(null)}
+        />
+        <ScrollArea className="max-h-[min(420px,60vh)] rounded-md border">
+          <div className="p-0.5">
+            {tree.map((node) => (
+              <MoveDocumentTreeItem
+                key={node.folder.id}
+                node={node}
+                targetFolderId={targetFolderId}
+                onSelect={setTargetFolderId}
+              />
+            ))}
+          </div>
+        </ScrollArea>
+      </div>
+      <DialogFooter>
+        <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
+          취소
+        </Button>
+        <Button type="button" disabled={busy || isSameFolder || isProcessing} onClick={() => onSubmit(movingDocument, targetFolderId)}>
+          {busy ? <Loader2 className="size-4 animate-spin" /> : <FolderInput className="size-4" />}
+          이동
+        </Button>
+      </DialogFooter>
+    </div>
+  );
+}
+
+function MoveDocumentTreeItem({
+  node,
+  targetFolderId,
+  onSelect,
+}: {
+  node: FolderTreeNode;
+  targetFolderId: string | null;
+  onSelect: (folderId: string) => void;
+}) {
+  return (
+    <>
+      <MoveTargetButton
+        active={targetFolderId === node.folder.id}
+        disabled={false}
+        icon={Folder}
+        label={node.folder.name}
+        description={node.folder.path ?? node.folder.name}
+        style={{ paddingLeft: `${0.75 + node.depth * 0.85}rem` }}
+        onClick={() => onSelect(node.folder.id)}
+      />
+      {node.children.map((child) => (
+        <MoveDocumentTreeItem
+          key={child.folder.id}
+          node={child}
+          targetFolderId={targetFolderId}
+          onSelect={onSelect}
+        />
+      ))}
+    </>
+  );
+}
+
+function MoveTargetButton({
+  active,
+  description,
+  disabled,
+  icon: Icon,
+  label,
+  onClick,
+  style,
+}: {
+  active: boolean;
+  description: string;
+  disabled: boolean;
+  icon: ElementType;
+  label: string;
+  onClick: () => void;
+  style?: CSSProperties;
+}) {
+  return (
+    <button
+      type="button"
+      aria-disabled={disabled}
+      disabled={disabled}
+      className={cn(
+        "flex h-8 w-full items-center gap-1.5 rounded-sm px-2 py-1 text-left text-sm transition-colors",
+        active ? "bg-accent text-accent-foreground" : "hover:bg-accent/60",
+        disabled && "cursor-not-allowed opacity-45 hover:bg-transparent",
+      )}
+      style={style}
+      onClick={onClick}
+      title={`${label} · ${description}`}
+    >
+      <Icon className="size-3.5 shrink-0" />
+      <span className="min-w-0 flex-1 truncate font-medium">{label}</span>
+      <span className="hidden max-w-28 shrink-0 truncate text-xs text-muted-foreground sm:block">{description}</span>
+      {active && <Check className="size-3.5 shrink-0" />}
+    </button>
+  );
+}
+
 function DeleteConfirmDialog({
   busy,
   state,
@@ -1049,6 +1509,8 @@ function ArchiveContextMenu({
   state,
   onClose,
   onCreateFolder,
+  onMoveFolder,
+  onMoveDocument,
   onRenameFolder,
   onDeleteFolder,
   onDeleteDocument,
@@ -1056,6 +1518,8 @@ function ArchiveContextMenu({
   state: ContextMenuState;
   onClose: () => void;
   onCreateFolder: (parentId: string | null) => void;
+  onMoveFolder: (folder: FolderType) => void;
+  onMoveDocument: (document: ArchiveDocument) => void;
   onRenameFolder: (folder: FolderType) => void;
   onDeleteFolder: (folder: FolderType) => void;
   onDeleteDocument: (document: ArchiveDocument) => void;
@@ -1103,6 +1567,14 @@ function ArchiveContextMenu({
               onClose();
             }}
           />
+          <ContextMenuButton
+            icon={FolderInput}
+            label="폴더 이동"
+            onClick={() => {
+              onMoveFolder(state.folder);
+              onClose();
+            }}
+          />
           <div className="-mx-1 my-1 h-px bg-border" />
           <ContextMenuButton
             destructive
@@ -1124,6 +1596,15 @@ function ArchiveContextMenu({
               onClose();
             }}
           />
+          <ContextMenuButton
+            disabled={isProcessingDocument(state.document)}
+            icon={FolderInput}
+            label="문서 이동"
+            onClick={() => {
+              onMoveDocument(state.document);
+              onClose();
+            }}
+          />
           <div className="-mx-1 my-1 h-px bg-border" />
           <ContextMenuButton
             destructive
@@ -1142,11 +1623,13 @@ function ArchiveContextMenu({
 
 function ContextMenuButton({
   destructive,
+  disabled,
   icon: Icon,
   label,
   onClick,
 }: {
   destructive?: boolean;
+  disabled?: boolean;
   icon: ElementType;
   label: string;
   onClick: () => void;
@@ -1157,7 +1640,9 @@ function ContextMenuButton({
       className={cn(
         "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm outline-none hover:bg-accent hover:text-accent-foreground",
         destructive && "text-destructive hover:bg-destructive/10 hover:text-destructive",
+        disabled && "cursor-not-allowed opacity-50 hover:bg-transparent hover:text-inherit",
       )}
+      disabled={disabled}
       onClick={onClick}
       role="menuitem"
     >
@@ -1174,6 +1659,7 @@ function DocumentResultRow({
   selected,
   onDelete,
   onGoToFolder,
+  onMove,
   onOpen,
   onSelect,
   onShowContextMenu,
@@ -1184,6 +1670,7 @@ function DocumentResultRow({
   selected: boolean;
   onDelete: () => void;
   onGoToFolder: () => void;
+  onMove: () => void;
   onOpen: () => void;
   onSelect: () => void;
   onShowContextMenu: (x: number, y: number) => void;
@@ -1195,6 +1682,7 @@ function DocumentResultRow({
         selected={selected}
         onDelete={onDelete}
         onGoToFolder={onGoToFolder}
+        onMove={onMove}
         onOpen={onOpen}
         onSelect={onSelect}
         onShowContextMenu={onShowContextMenu}
@@ -1241,8 +1729,10 @@ function DocumentResultRow({
         </span>
         <div className="flex items-center justify-end">
           <DocumentRowMenu
+            document={document}
             onDelete={onDelete}
             onGoToFolder={onGoToFolder}
+            onMove={onMove}
             onOpen={onOpen}
           />
         </div>
@@ -1280,6 +1770,7 @@ function DocumentRow({
   selected,
   onDelete,
   onGoToFolder,
+  onMove,
   onOpen,
   onSelect,
   onShowContextMenu,
@@ -1288,6 +1779,7 @@ function DocumentRow({
   selected: boolean;
   onDelete: () => void;
   onGoToFolder: () => void;
+  onMove: () => void;
   onOpen: () => void;
   onSelect: () => void;
   onShowContextMenu: (x: number, y: number) => void;
@@ -1321,8 +1813,10 @@ function DocumentRow({
         </Badge>
       </span>
       <DocumentRowMenu
+        document={document}
         onDelete={onDelete}
         onGoToFolder={onGoToFolder}
+        onMove={onMove}
         onOpen={onOpen}
       />
     </div>
@@ -1347,14 +1841,20 @@ function DocumentRowContent({ document }: { document: ArchiveDocument }) {
 }
 
 function DocumentRowMenu({
+  document,
   onDelete,
   onGoToFolder,
+  onMove,
   onOpen,
 }: {
+  document: ArchiveDocument;
   onDelete: () => void;
   onGoToFolder: () => void;
+  onMove: () => void;
   onOpen: () => void;
 }) {
+  const isProcessing = isProcessingDocument(document);
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -1385,7 +1885,17 @@ function DocumentRowMenu({
           }}
         >
           <FolderOpen className="size-4" />
-          폴더로 이동
+          위치 열기
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={isProcessing}
+          onClick={(event) => {
+            event.stopPropagation();
+            onMove();
+          }}
+        >
+          <FolderInput className="size-4" />
+          문서 이동
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
@@ -1711,6 +2221,7 @@ function ArchiveSidebar({
   onSelectFolder,
   onCreateFolder,
   onDeleteFolder,
+  onMoveFolder,
   onRenameFolder,
   onShowFolderContextMenu,
   onUpload,
@@ -1720,6 +2231,7 @@ function ArchiveSidebar({
   onSelectFolder: (folderId: string | null) => void;
   onCreateFolder: (parentId: string | null) => void;
   onDeleteFolder: (folder: FolderType) => void;
+  onMoveFolder: (folder: FolderType) => void;
   onRenameFolder: (folder: FolderType) => void;
   onShowFolderContextMenu: (folder: FolderType, x: number, y: number) => void;
   onUpload: () => void;
@@ -1765,6 +2277,7 @@ function ArchiveSidebar({
                   selectedFolderId={selectedFolderId}
                   onCreateFolder={onCreateFolder}
                   onDeleteFolder={onDeleteFolder}
+                  onMoveFolder={onMoveFolder}
                   onRenameFolder={onRenameFolder}
                   onSelectFolder={onSelectFolder}
                   onShowFolderContextMenu={onShowFolderContextMenu}
@@ -1806,6 +2319,7 @@ function FolderTreeItem({
   selectedFolderId,
   onCreateFolder,
   onDeleteFolder,
+  onMoveFolder,
   onRenameFolder,
   onSelectFolder,
   onShowFolderContextMenu,
@@ -1814,6 +2328,7 @@ function FolderTreeItem({
   selectedFolderId: string | null;
   onCreateFolder: (parentId: string | null) => void;
   onDeleteFolder: (folder: FolderType) => void;
+  onMoveFolder: (folder: FolderType) => void;
   onRenameFolder: (folder: FolderType) => void;
   onSelectFolder: (folderId: string | null) => void;
   onShowFolderContextMenu: (folder: FolderType, x: number, y: number) => void;
@@ -1843,6 +2358,7 @@ function FolderTreeItem({
           folder={node.folder}
           onCreateFolder={() => onCreateFolder(node.folder.id)}
           onDeleteFolder={() => onDeleteFolder(node.folder)}
+          onMoveFolder={() => onMoveFolder(node.folder)}
           onRenameFolder={() => onRenameFolder(node.folder)}
         />
       </SidebarMenuItem>
@@ -1853,6 +2369,7 @@ function FolderTreeItem({
           selectedFolderId={selectedFolderId}
           onCreateFolder={onCreateFolder}
           onDeleteFolder={onDeleteFolder}
+          onMoveFolder={onMoveFolder}
           onRenameFolder={onRenameFolder}
           onSelectFolder={onSelectFolder}
           onShowFolderContextMenu={onShowFolderContextMenu}
@@ -1866,11 +2383,13 @@ function FolderRowMenu({
   folder,
   onCreateFolder,
   onDeleteFolder,
+  onMoveFolder,
   onRenameFolder,
 }: {
   folder: FolderType;
   onCreateFolder: () => void;
   onDeleteFolder: () => void;
+  onMoveFolder: () => void;
   onRenameFolder: () => void;
 }) {
   const { isMobile } = useSidebar();
@@ -1883,21 +2402,48 @@ function FolderRowMenu({
         </SidebarMenuAction>
       </DropdownMenuTrigger>
       <DropdownMenuContent side={isMobile ? "bottom" : "right"} align={isMobile ? "end" : "start"} className="w-44">
-        <DropdownMenuItem onClick={onCreateFolder}>
-          <FolderPlus className="size-4" />
-          새 하위 폴더
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={onRenameFolder}>
-          <FolderPen className="size-4" />
-          이름 변경
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem variant="destructive" onClick={onDeleteFolder}>
-          <Trash2 className="size-4" />
-          폴더 삭제
-        </DropdownMenuItem>
+        <FolderActionItems
+          onCreateFolder={onCreateFolder}
+          onDeleteFolder={onDeleteFolder}
+          onMoveFolder={onMoveFolder}
+          onRenameFolder={onRenameFolder}
+        />
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+function FolderActionItems({
+  onCreateFolder,
+  onDeleteFolder,
+  onMoveFolder,
+  onRenameFolder,
+}: {
+  onCreateFolder: () => void;
+  onDeleteFolder: () => void;
+  onMoveFolder: () => void;
+  onRenameFolder: () => void;
+}) {
+  return (
+    <>
+      <DropdownMenuItem onClick={onCreateFolder}>
+        <FolderPlus className="size-4" />
+        새 하위 폴더
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={onRenameFolder}>
+        <FolderPen className="size-4" />
+        이름 변경
+      </DropdownMenuItem>
+      <DropdownMenuItem onClick={onMoveFolder}>
+        <FolderInput className="size-4" />
+        폴더 이동
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem variant="destructive" onClick={onDeleteFolder}>
+        <Trash2 className="size-4" />
+        폴더 삭제
+      </DropdownMenuItem>
+    </>
   );
 }
 
@@ -1966,6 +2512,10 @@ function formatList(values: string[] | undefined) {
 
 function documentDisplayName(document: ArchiveDocument) {
   return document.corrected_filename || document.title || document.original_filename;
+}
+
+function isProcessingDocument(document: ArchiveDocument) {
+  return document.processing_status === "pending" || document.processing_status === "processing";
 }
 
 function formatSimilarityScore(score: number | null) {
@@ -2064,14 +2614,14 @@ function buildFolderTree(folders: FolderType[]) {
   return roots;
 }
 
-function isFolderOrDescendant(folderId: string, deletedFolder: FolderType, folders: FolderType[]) {
-  if (folderId === deletedFolder.id) return true;
+function isFolderOrDescendantOf(folderId: string, ancestorFolderId: string, folders: FolderType[]) {
+  if (folderId === ancestorFolderId) return true;
 
   const foldersById = new Map(folders.map((folder) => [folder.id, folder]));
   let folder = foldersById.get(folderId);
 
   while (folder?.parent_id) {
-    if (folder.parent_id === deletedFolder.id) return true;
+    if (folder.parent_id === ancestorFolderId) return true;
     folder = foldersById.get(folder.parent_id);
   }
 

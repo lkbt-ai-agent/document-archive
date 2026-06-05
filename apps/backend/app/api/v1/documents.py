@@ -10,9 +10,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.ai.providers import AIProviderRuntimeError
-from app.api.v1.schemas import DocumentChunkRead, DocumentRead
+from app.api.v1.schemas import DocumentChunkRead, DocumentRead, DocumentUpdate
 from app.core.database import SessionLocal, get_db
-from app.db.models import Document, DocumentChunk, ProcessingStatus
+from app.db.models import Document, DocumentChunk, Folder, ProcessingStatus
 from app.modules.documents.service import DocumentService
 from app.modules.extraction.service import SUPPORTED_EXTENSIONS
 from app.modules.storage.service import StorageService
@@ -98,6 +98,20 @@ def get_document(document_id: uuid.UUID, db: Session = Depends(get_db)) -> Docum
     document = db.scalar(select(Document).options(selectinload(Document.metadata_row)).where(Document.id == document_id))
     if not document:
         raise HTTPException(status_code=404, detail="Document not found.")
+    return document
+
+
+@router.patch("/{document_id}", response_model=DocumentRead)
+def update_document(document_id: uuid.UUID, payload: DocumentUpdate, db: Session = Depends(get_db)) -> Document:
+    document = db.scalar(select(Document).options(selectinload(Document.metadata_row)).where(Document.id == document_id))
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    if document.processing_status in {ProcessingStatus.pending, ProcessingStatus.processing}:
+        raise HTTPException(status_code=400, detail="Processing documents cannot be moved.")
+    if "folder_id" in payload.model_fields_set and payload.folder_id is not None and not db.get(Folder, payload.folder_id):
+        raise HTTPException(status_code=404, detail="Target folder not found.")
+    if "folder_id" in payload.model_fields_set:
+        document.folder_id = payload.folder_id
     return document
 
 

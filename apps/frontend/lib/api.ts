@@ -135,6 +135,11 @@ export const api = {
     return request<ArchiveDocument[]>(`/documents${query}`);
   },
   document: (documentId: string) => request<ArchiveDocument>(`/documents/${documentId}`),
+  updateDocument: (documentId: string, payload: { folder_id?: string | null }) =>
+    request<ArchiveDocument>(`/documents/${documentId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
   deleteDocument: (documentId: string) =>
     request<void>(`/documents/${documentId}`, {
       method: "DELETE",

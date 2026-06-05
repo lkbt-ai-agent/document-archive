@@ -32,8 +32,9 @@
 1. DB 준비.
 2. `apps/backend/.env` 작성.
 3. 필요 시 `.env.local-ai` 작성.
-4. 백엔드 실행: [apps/backend/README.md](apps/backend/README.md).
-5. 프론트엔드 실행: [apps/frontend/README.md](apps/frontend/README.md).
+4. `sh start_archive_services.sh` 로 즉시 백그라운드 실행하거나, 각 프로젝트의 readme 명령어 참고하여 별도 shell 에서 실행
+  - 백엔드 실행: [apps/backend/README.md](apps/backend/README.md).
+  - 프론트엔드 실행: [apps/frontend/README.md](apps/frontend/README.md).
 
 ## 설정
 

@@ -65,6 +65,10 @@ class DocumentRead(BaseModel):
     metadata_row: DocumentMetadataRead | None = None
 
 
+class DocumentUpdate(BaseModel):
+    folder_id: uuid.UUID | None = None
+
+
 class DocumentChunkRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
