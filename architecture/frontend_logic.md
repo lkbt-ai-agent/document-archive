@@ -1,5 +1,7 @@
 # 프론트엔드 로직
 
+프론트엔드는 Next.js 16 App Router, React 19, TypeScript 5를 기준으로 합니다.
+
 ## 헤더 검색과 키워드 필터
 
 헤더 검색은 현재 선택 폴더와 무관하게 전체 폴더를 대상으로 실행한다. `keyword`, `semantic`, `rag` 호출 모두 선택된 `folderId`를 보내지 않는다.

@@ -1,6 +1,6 @@
 # 백엔드와 API
 
-백엔드는 FastAPI 앱입니다. 진입점은 `apps/backend/app/main.py`이고 모든 업무 API는 `/api/v1` 아래에 있습니다.
+백엔드는 FastAPI 0.x 앱입니다. Pydantic 2 schema와 SQLAlchemy 2 ORM을 사용합니다. 진입점은 `apps/backend/app/main.py`이고 모든 업무 API는 `/api/v1` 아래에 있습니다.
 
 ## 구조
 
@@ -15,7 +15,7 @@ apps/backend/app/
   ai/{providers,llama_cpp_provider}.py
 ```
 
-시작 시 `.env`와 `.env.local-ai`를 읽고, PostgreSQL pgvector 확장과 SQLAlchemy 테이블을 준비합니다.
+시작 시 `.env`와 `.env.local-ai`를 읽고, PostgreSQL 버전 확인 필요 DB에 pgvector extension 버전 확인 필요 항목과 SQLAlchemy 2 테이블을 준비합니다.
 
 ## 라우터
 
@@ -50,7 +50,7 @@ apps/backend/app/
 ### 검색
 
 - `POST /api/v1/search/keyword`: 청크 내용 `ILIKE` 검색.
-- `POST /api/v1/search/semantic`: 쿼리 임베딩 후 pgvector 코사인 거리 검색.
+- `POST /api/v1/search/semantic`: 쿼리 임베딩 후 pgvector extension 코사인 거리 검색.
 - `POST /api/v1/search/rag`: 의미 검색 결과를 근거로 답변과 인용 청크 반환.
 
 키워드 검색은 전체 폴더를 대상으로 하며, 폴더 필터를 받지 않습니다. 요청 계약은 다음과 같습니다.

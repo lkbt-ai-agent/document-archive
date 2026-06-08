@@ -2,7 +2,7 @@
 
 ## 검색 필터 판단
 
-vector/RAG 검색에 metadata filter를 붙이는 것 자체는 가능한 패턴입니다. 다만 현재 구현은 pgvector `cosine_distance()` 기반 단순 top-k 검색이고, filtered ANN 전용 최적화가 없습니다.
+vector/RAG 검색에 metadata filter를 붙이는 것 자체는 가능한 패턴입니다. 다만 현재 구현은 pgvector extension `cosine_distance()` 기반 단순 top-k 검색이고, filtered ANN 전용 최적화가 없습니다.
 
 사용자가 조작하는 상세 필터를 의미 검색이나 RAG에 적용하면 유사도 품질이 떨어지거나 관련 문서가 retrieval 전에 제외될 수 있습니다. 따라서 파일 유형, 등록일, 처리 상태 같은 상세 필터는 키워드 검색에만 적용합니다. 의미 검색과 RAG는 `processing_status=ready`, `embedding IS NOT NULL` 같은 필수 범위 조건만 사용합니다.
 
@@ -23,7 +23,7 @@ vector/RAG 검색에 metadata filter를 붙이는 것 자체는 가능한 패턴
 1. 클라이언트가 `/api/v1/search/semantic`에 질문과 `limit`를 보냅니다.
 2. 백엔드가 embedding 제공자에 질문 1개를 보내 벡터를 받습니다.
 3. `processing_status=ready`이고 `embedding IS NOT NULL`인 청크만 조회합니다.
-4. pgvector `cosine_distance()`로 질문 벡터와 청크 벡터를 비교합니다.
+4. pgvector extension `cosine_distance()`로 질문 벡터와 청크 벡터를 비교합니다.
 5. 거리가 작은 순서로 `limit`개를 반환합니다.
 6. 응답 score는 `1 - distance`입니다.
 

@@ -1,6 +1,6 @@
 # PDF 업로드 흐름
 
-PDF 업로드는 원본 저장과 문서 레코드 생성 후, FastAPI `BackgroundTasks`에서 처리됩니다. 업로드 API는 처리 완료를 기다리지 않고 `processing` 상태 문서를 먼저 반환합니다.
+PDF 업로드는 원본 저장과 문서 레코드 생성 후, FastAPI 0.x `BackgroundTasks`에서 처리됩니다. 업로드 API는 처리 완료를 기다리지 않고 `processing` 상태 문서를 먼저 반환합니다.
 
 ## 구현 대조 결과
 
@@ -17,12 +17,12 @@ PDF 업로드는 원본 저장과 문서 레코드 생성 후, FastAPI `Backgrou
 4. 백엔드는 확장자가 지원 목록인지 확인합니다. 지원 확장자는 `.jpg`, `.jpeg`, `.png`, `.webp`, `.pdf`, `.txt`, `.md`입니다.
 5. 업로드 파일 전체를 메모리로 읽습니다.
 6. 폴더 ID가 있으면 폴더 존재 여부를 확인합니다.
-7. 원본 PDF를 로컬 디스크 또는 MinIO에 `documents/originals/{document_id}/{filename}`으로 저장합니다.
+7. 원본 PDF를 로컬 디스크 또는 MinIO server 버전 확인 필요 저장소에 `documents/originals/{document_id}/{filename}`으로 저장합니다.
 8. `Document`를 `processing` 상태로 만들고, 파일 크기와 SHA-256 체크섬, 저장 위치를 기록합니다.
 9. DB 커밋 후 `BackgroundTasks`에 실제 처리를 등록합니다.
 10. API는 `201`과 `processing` 상태 문서를 반환합니다.
 11. 백그라운드 작업은 문서를 다시 읽고 `processing_error`를 초기화합니다.
-12. `pypdf.PdfReader`로 페이지 텍스트를 추출합니다.
+12. `pypdf.PdfReader`로 페이지 텍스트를 추출합니다. 기준 라이브러리는 pypdf 5입니다.
 13. generation 제공자로 제목, 요약, 태그, 언어, 문서 유형, 인물, 조직, 주요 날짜를 생성합니다.
 14. 파일명을 제목 기반 `corrected_filename`으로 보정합니다.
 15. 텍스트를 360자 단위, 60자 overlap으로 청킹합니다.
@@ -44,7 +44,7 @@ PDF 업로드는 원본 저장과 문서 레코드 생성 후, FastAPI `Backgrou
 ## 제한
 
 - 스캔 PDF OCR fallback은 없습니다.
-- PDF 추출은 `pypdf` 텍스트 레이어만 사용합니다.
+- PDF 추출은 `pypdf 5` 텍스트 레이어만 사용합니다.
 - 재처리 API는 있지만 현재 `409`를 반환합니다.
-- 별도 큐/워커는 없습니다. FastAPI `BackgroundTasks`만 사용합니다.
+- 별도 큐/워커는 없습니다. FastAPI 0.x `BackgroundTasks`만 사용합니다.
 - 검색 필터는 폴더와 루트 여부만 지원합니다.

@@ -4,7 +4,7 @@
 
 ## PostgreSQL + pgvector
 
-백엔드는 시작 시 `CREATE EXTENSION IF NOT EXISTS vector`를 실행하고 SQLAlchemy 모델로 테이블을 생성합니다.
+백엔드는 PostgreSQL 버전 확인 필요 DB 시작 시 `CREATE EXTENSION IF NOT EXISTS vector`를 실행하고 SQLAlchemy 2 모델로 테이블을 생성합니다. pgvector extension 버전은 확인 필요입니다.
 
 저장 데이터:
 
@@ -25,7 +25,7 @@
 
 ## 파일 저장
 
-`StorageService`는 같은 API로 로컬 디스크 또는 MinIO에 저장합니다.
+`StorageService`는 같은 API로 로컬 디스크 또는 MinIO server 버전 확인 필요 저장소에 저장합니다. MinIO Python SDK는 minio-py 7입니다.
 
 ```text
 documents/
@@ -39,7 +39,7 @@ documents/
 
 ## MinIO
 
-MinIO 설정 네 값이 모두 있으면 기본 저장소가 MinIO가 됩니다. 명시적으로 바꾸려면 `OBJECT_STORAGE_BACKEND=local` 또는 `OBJECT_STORAGE_BACKEND=minio`를 사용합니다.
+MinIO server 설정 네 값이 모두 있으면 기본 저장소가 MinIO가 됩니다. 명시적으로 바꾸려면 `OBJECT_STORAGE_BACKEND=local` 또는 `OBJECT_STORAGE_BACKEND=minio`를 사용합니다.
 
 필요 값:
 
@@ -48,9 +48,9 @@ MinIO 설정 네 값이 모두 있으면 기본 저장소가 MinIO가 됩니다.
 - `MINIO_SECRET_KEY`
 - `MINIO_BUCKET`
 
-보기와 다운로드 엔드포인트는 MinIO 객체에 대해 짧은 수명의 presigned URL로 리다이렉트합니다. 자격 증명은 프론트엔드에 노출하지 않습니다.
+보기와 다운로드 엔드포인트는 MinIO 객체에 대해 minio-py 7 presigned URL로 리다이렉트합니다. 자격 증명은 프론트엔드에 노출하지 않습니다.
 
-MinIO 저장 시 DB에는 `storage_bucket=MINIO_BUCKET`, `storage_object_key=documents/...`를 저장합니다. 버킷이 없으면 저장 시 생성합니다.
+MinIO server 저장 시 DB에는 `storage_bucket=MINIO_BUCKET`, `storage_object_key=documents/...`를 저장합니다. 버킷이 없으면 저장 시 생성합니다.
 
 ## 설정 로딩
 
@@ -64,9 +64,9 @@ MinIO 저장 시 DB에는 `storage_bucket=MINIO_BUCKET`, `storage_object_key=doc
 ## 런타임 배치
 
 ```text
-Next.js
-  -> FastAPI
-  -> PostgreSQL + pgvector
-  -> local storage or MinIO
+Next.js 16
+  -> FastAPI 0.x
+  -> PostgreSQL + pgvector extension
+  -> local storage or MinIO server
   -> llama.cpp servers
 ```

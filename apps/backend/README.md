@@ -1,6 +1,6 @@
 # 백엔드
 
-FastAPI 문서 아카이브 API.
+FastAPI 0.x + Pydantic 2 + SQLAlchemy 2 문서 아카이브 API.
 
 ## 설정
 
@@ -9,14 +9,14 @@ cp .env.example .env
 ```
 
 - 필수: `DATABASE_URL`.
-- 선택 MinIO: `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET`.
+- 선택 MinIO server 버전 확인 필요: `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET`.
 - 저장소 모드: `OBJECT_STORAGE_BACKEND=local|minio`.
 - 로컬 저장 기본값: `apps/backend/.data/uploads`.
 - 저장 위치 변경: `LOCAL_STORAGE_DIR`.
 - 로컬 AI 파일: 루트 `.env.local-ai`.
 - AI 매핑: `../../config/ai_providers.json`.
 - 임베딩 차원 변경 시 `LOCAL_AI_EMBEDDING_DIMENSION`과 DB 모델을 함께 맞춤.
-- 시작 시 pgvector 확장과 SQLAlchemy 테이블 생성.
+- 시작 시 PostgreSQL 버전 확인 필요 DB에 pgvector extension 버전 확인 필요 항목을 준비하고 SQLAlchemy 2 테이블 생성.
 
 ## 실행
 
@@ -72,7 +72,7 @@ python3 scripts/local_ai_health_check.py
 - `app/api/v1`: API 라우터.
 - `app/modules`: 도메인 서비스.
 - `app/ai`: AI provider.
-- `app/db/models.py`: SQLAlchemy 모델.
+- `app/db/models.py`: SQLAlchemy 2 모델.
 
 ## 주요 기능
 

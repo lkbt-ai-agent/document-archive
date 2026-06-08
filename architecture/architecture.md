@@ -4,34 +4,35 @@
 
 ## 구성
 
-- 프론트엔드: `apps/frontend/` Next.js 16.
-- 백엔드: `apps/backend/` FastAPI.
-- 데이터베이스: PostgreSQL + pgvector.
-- 파일 저장소: 기본 로컬 디스크, 선택 MinIO.
-- AI 런타임: llama.cpp OpenAI 호환 서버.
+- 프론트엔드: `apps/frontend/` Next.js 16 + React 19.
+- 백엔드: `apps/backend/` FastAPI 0.x + Pydantic 2 + SQLAlchemy 2.
+- 데이터베이스: PostgreSQL 버전 확인 필요 + pgvector extension 버전 확인 필요.
+- 파일 저장소: 기본 로컬 디스크, 선택 MinIO server 버전 확인 필요, minio-py 7.
+- AI 런타임: llama.cpp 버전 확인 필요, OpenAI-compatible llama-server API.
+- AI 모델: Qwen2.5-VL OCR, BGE-M3 embedding, Qwen3 generation.
 - AI 설정: `config/ai_providers.json`, `.env.local-ai`.
 
 ## 현재 흐름
 
 ```text
-Next.js UI
-  -> FastAPI /api/v1
-  -> PostgreSQL + pgvector
-  -> 로컬 파일 또는 MinIO
-  -> llama.cpp OCR, embedding, generation 제공자
+Next.js 16 UI
+  -> FastAPI 0.x /api/v1
+  -> PostgreSQL + pgvector extension
+  -> 로컬 파일 또는 MinIO server
+  -> llama.cpp OpenAI-compatible provider
 ```
 
-업로드 API는 원본 저장과 문서 레코드 생성을 먼저 끝낸 뒤 `processing` 문서를 반환합니다. 텍스트 추출, 메타데이터 생성, 청크 임베딩은 FastAPI `BackgroundTasks`에서 처리하고 `ready` 또는 `failed`를 기록합니다.
+업로드 API는 원본 저장과 문서 레코드 생성을 먼저 끝낸 뒤 `processing` 문서를 반환합니다. 텍스트 추출, 메타데이터 생성, 청크 임베딩은 FastAPI 0.x `BackgroundTasks`에서 처리하고 `ready` 또는 `failed`를 기록합니다.
 
 ## 주요 기능
 
 - 폴더: 생성, 이름 변경, 이동, 삭제.
 - 문서: 업로드, 목록, 상세, 원본 보기, 다운로드, 삭제.
 - 추출
-  - PDF: `pypdf`
+  - PDF: `pypdf 5`
   - 텍스트: UTF-8 디코딩
   - 이미지: OCR 제공자
-- 검색: 키워드 검색, pgvector 기반 의미 검색, RAG 답변 API.
+- 검색: 키워드 검색, pgvector extension 기반 의미 검색, RAG 답변 API.
 - AI 작업: 요약, 초안, 보고서, 문체 변경, 문서 병합.
 - 계보: 출처 문서, 출처 청크, 프롬프트, 모델, 제공자, 파라미터 기록.
 

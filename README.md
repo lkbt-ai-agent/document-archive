@@ -4,16 +4,17 @@
 
 ## 주요 스펙
 
-- Next.js
-- FastAPI
-- PostgreSQL/pgvector
-- MinIO (or 로컬 스토리지)
-- llama.cpp 로컬 AI
+- Next.js 16 + React 19
+- FastAPI 0.x + Pydantic 2 + SQLAlchemy 2
+- PostgreSQL 버전 확인 필요 + pgvector extension 버전 확인 필요
+- MinIO server 버전 확인 필요 또는 로컬 스토리지, minio-py 7
+- llama.cpp 버전 확인 필요, OpenAI-compatible llama-server API
+- Qwen2.5-VL, BGE-M3, Qwen3 계열 로컬 모델
 
 ## 구조
 
-- `apps/backend`: FastAPI API.
-- `apps/frontend`: Next.js UI.
+- `apps/backend`: FastAPI 0.x API.
+- `apps/frontend`: Next.js 16 UI.
 - `architecture`: 설계 문서.
 - `plan`: 작업 계획.
 - `config`: AI provider 설정.
@@ -23,9 +24,9 @@
 
 - Python
 - Node.js/npm
-- PostgreSQL + pgvector
-- llama.cpp
-- 선택: MinIO
+- PostgreSQL 버전 확인 필요 + pgvector extension 버전 확인 필요
+- llama.cpp 버전 확인 필요
+- 선택: MinIO server 버전 확인 필요
 
 ## 빠른 시작
 

@@ -1,6 +1,6 @@
 # 로컬 AI 모델
 
-로컬 AI는 llama.cpp `llama-server`를 사용합니다. 백엔드는 OCR, embedding, generation 역할을 별도 제공자로 봅니다.
+로컬 AI는 llama.cpp 버전 확인 필요 `llama-server`를 사용합니다. 백엔드는 OCR, embedding, generation 역할을 별도 제공자로 봅니다.
 
 ## 역할과 기본 포트
 
@@ -29,7 +29,7 @@ LOCAL_AI_GENERATION_MODEL_PATH=/absolute/path/to/generation.gguf
 
 ## 서버 컨텍스트
 
-`scripts/start_local_ai_provider.py`는 llama-server를 다음 기본 컨텍스트로 실행합니다.
+`scripts/start_local_ai_provider.py`는 llama.cpp `llama-server`를 다음 기본 컨텍스트로 실행합니다. 사용 중인 llama.cpp 버전에 따라 옵션 호환성 검증이 필요합니다.
 
 - `generation`: `8192`
 - `ocr`: `4096`
@@ -43,7 +43,7 @@ LOCAL_AI_EMBEDDING_CTX_SIZE=4096
 LOCAL_AI_GENERATION_CTX_SIZE=8192
 ```
 
-이 값은 해당 llama-server를 다시 시작해야 적용됩니다. 생성 중 context 초과가 나면 백엔드는 입력 글자 수와 `max_tokens`를 줄여 재시도하고, 그래도 실패하면 `LOCAL_AI_GENERATION_CTX_SIZE` 확대를 안내합니다.
+이 값은 해당 llama.cpp `llama-server`를 다시 시작해야 적용됩니다. 생성 중 context 초과가 나면 백엔드는 입력 글자 수와 `max_tokens`를 줄여 재시도하고, 그래도 실패하면 `LOCAL_AI_GENERATION_CTX_SIZE` 확대를 안내합니다.
 
 ## 임베딩 배치
 
@@ -53,7 +53,7 @@ LOCAL_AI_GENERATION_CTX_SIZE=8192
 LOCAL_AI_EMBEDDING_REQUEST_BATCH_SIZE=1
 ```
 
-llama-server 실행 배치가 필요하면 다음 값을 조정합니다.
+llama.cpp `llama-server` 실행 배치가 필요하면 다음 값을 조정합니다.
 
 ```bash
 LOCAL_AI_EMBEDDING_BATCH_SIZE=512
