@@ -41,6 +41,7 @@ apps/backend/app/
 - `GET /api/v1/documents/{document_id}/content`: 추출 청크 목록.
 - `GET /api/v1/documents/{document_id}/view`: 원본 파일 inline 보기.
 - `GET /api/v1/documents/{document_id}/download`: 원본 파일 다운로드.
+- `PATCH /api/v1/documents/{document_id}`: 제목 또는 폴더 변경. 폴더 이동은 `folder_id`만 변경하고 `updated_at`은 보존합니다.
 - `POST /api/v1/documents/{document_id}/process`: 현재 `409` 반환. 저장 객체 재처리는 미구현입니다.
 - `DELETE /api/v1/documents/{document_id}`: 문서 삭제.
 
@@ -52,7 +53,27 @@ apps/backend/app/
 - `POST /api/v1/search/semantic`: 쿼리 임베딩 후 pgvector 코사인 거리 검색.
 - `POST /api/v1/search/rag`: 의미 검색 결과를 근거로 답변과 인용 청크 반환.
 
-검색 필터는 현재 `folder_id`, `root_only`, `limit`만 지원합니다.
+키워드 검색은 전체 폴더를 대상으로 하며, 폴더 필터를 받지 않습니다. 요청 계약은 다음과 같습니다.
+
+```py
+KeywordSearchRequest(
+  query: str,
+  limit: int = 25,
+  file_types: list["pdf" | "image" | "text"] = [],
+  created_from: datetime | None = None,
+  created_to: datetime | None = None,
+  processing_statuses: list[ProcessingStatus] | None = None,
+)
+```
+
+키워드 검색 필터 규칙:
+
+- `file_types`는 `Document.mime_type` 기준입니다.
+- `created_from`, `created_to`는 `Document.created_at` 기준입니다.
+- `processing_statuses`가 누락되거나 `null`이면 `ready`만 검색합니다.
+- `processing_statuses`가 빈 배열이면 상태 조건을 적용하지 않습니다.
+
+의미 검색과 RAG 검색은 기존처럼 `folder_id`, `root_only`, `limit` 계약을 유지합니다. 다만 헤더 검색 UI는 선택 폴더를 보내지 않아 전체 폴더를 대상으로 검색합니다.
 
 ### AI 작업
 

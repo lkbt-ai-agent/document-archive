@@ -13,6 +13,7 @@ import {
   FileImage,
   FileText,
   FileType,
+  Filter,
   Folder,
   FolderInput,
   FolderOpen,
@@ -34,7 +35,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ElementType, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ElementType, type ReactNode } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -93,7 +94,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ApiNetworkError, api, type ArchiveDocument, type Folder as FolderType, type Lineage, type RagSearchResponse, type SearchResult } from "@/lib/api";
+import { ApiNetworkError, api, type ArchiveDocument, type Folder as FolderType, type KeywordSearchFilters, type Lineage, type RagSearchResponse, type SearchResult } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 type AIAction = "summarize" | "draft" | "report" | "rewrite-style" | "merge-documents";
@@ -112,6 +113,12 @@ type ContextMenuState =
   | { type: "folder"; folder: FolderType; x: number; y: number }
   | { type: "document"; document: ArchiveDocument; x: number; y: number }
   | null;
+type KeywordSearchFilterState = {
+  fileTypes: Array<"pdf" | "image" | "text">;
+  createdFrom: string;
+  createdTo: string;
+  processingStatuses: string[];
+};
 
 const actionLabels: Record<AIAction, string> = {
   summarize: "요약",
@@ -133,6 +140,25 @@ const fileTone = {
   text: "bg-emerald-50 text-emerald-700 ring-emerald-200",
 };
 
+const defaultKeywordSearchFilters: KeywordSearchFilterState = {
+  fileTypes: [],
+  createdFrom: "",
+  createdTo: "",
+  processingStatuses: ["ready"],
+};
+
+const fileTypeFilterOptions: Array<{ value: "pdf" | "image" | "text"; label: string }> = [
+  { value: "pdf", label: "PDF" },
+  { value: "image", label: "이미지" },
+  { value: "text", label: "텍스트" },
+];
+
+const processingStatusFilterOptions = [
+  { value: "ready", label: "준비됨" },
+  { value: "processing", label: "처리 중" },
+  { value: "failed", label: "실패" },
+];
+
 export function ArchiveShell() {
   const [folders, setFolders] = useState<FolderType[]>([]);
   const [documents, setDocuments] = useState<ArchiveDocument[]>([]);
@@ -144,6 +170,7 @@ export function ArchiveShell() {
   const [ragElapsedSeconds, setRagElapsedSeconds] = useState<number | null>(null);
   const [searchMode, setSearchMode] = useState<SearchMode | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [keywordSearchFilters, setKeywordSearchFilters] = useState<KeywordSearchFilterState>(defaultKeywordSearchFilters);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -442,7 +469,7 @@ export function ArchiveShell() {
     }
   }
 
-  async function runSearch(mode: SearchMode) {
+  async function runSearch(mode: SearchMode, filtersOverride = keywordSearchFilters) {
     if (!searchQuery.trim()) {
       setSearchResults(null);
       setRagResponse(null);
@@ -455,12 +482,12 @@ export function ArchiveShell() {
     try {
       setBusy(true);
       setError(null);
-      const nextRagResponse = mode === "rag" ? await api.ragSearch(searchQuery.trim(), selectedFolderId) : null;
+      const nextRagResponse = mode === "rag" ? await api.ragSearch(searchQuery.trim()) : null;
       const results = nextRagResponse
         ? nextRagResponse.citations
         : mode === "keyword"
-          ? await api.keywordSearch(searchQuery.trim(), selectedFolderId)
-          : await api.semanticSearch(searchQuery.trim(), selectedFolderId);
+          ? await api.keywordSearch(searchQuery.trim(), toKeywordSearchFiltersPayload(filtersOverride))
+          : await api.semanticSearch(searchQuery.trim());
       const resultDocumentIds = Array.from(new Set(results.map((result) => result.document_id)));
       const loadedDocumentsById = new Map(documents.map((document) => [document.id, document]));
       const missingDocumentIds = resultDocumentIds.filter((documentId) => !loadedDocumentsById.has(documentId));
@@ -478,6 +505,29 @@ export function ArchiveShell() {
       setError(searchError instanceof Error ? searchError.message : "검색하지 못했습니다.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function applyKeywordSearchFilters(filters: KeywordSearchFilterState) {
+    setKeywordSearchFilters(filters);
+    if (!searchQuery.trim()) {
+      setSearchResults(null);
+      setRagResponse(null);
+      setRagElapsedSeconds(null);
+      setSearchMode(null);
+      setSearchDocuments([]);
+      return;
+    }
+    if (searchMode === "keyword") {
+      await runSearch("keyword", filters);
+      return;
+    }
+    if (searchMode === "semantic" || searchMode === "rag") {
+      setSearchResults(null);
+      setRagResponse(null);
+      setRagElapsedSeconds(null);
+      setSearchMode(null);
+      setSearchDocuments([]);
     }
   }
 
@@ -543,6 +593,7 @@ export function ArchiveShell() {
           error={error}
           folders={folders}
           loading={loading}
+          keywordSearchFilters={keywordSearchFilters}
           searchDocuments={searchDocuments}
           searchMode={searchMode}
           searchQuery={searchQuery}
@@ -571,6 +622,7 @@ export function ArchiveShell() {
           onSelectDocument={setSelectedDocumentId}
           onSelectFolder={selectFolder}
           onGoToDocumentFolder={(document) => selectFolder(document.folder_id, document.id)}
+          onApplyKeywordSearchFilters={applyKeywordSearchFilters}
           onShowDocumentContextMenu={(document, x, y) => setContextMenu({ type: "document", document, x, y })}
           onUpload={() => fileInputRef.current?.click()}
         />
@@ -654,6 +706,7 @@ function ArchiveWorkspace({
   error,
   folders,
   loading,
+  keywordSearchFilters,
   searchDocuments,
   searchMode,
   searchQuery,
@@ -673,6 +726,7 @@ function ArchiveWorkspace({
   onRunSearch,
   onSearchQueryChange,
   onGoToDocumentFolder,
+  onApplyKeywordSearchFilters,
   onSelectDocument,
   onSelectFolder,
   onShowDocumentContextMenu,
@@ -683,6 +737,7 @@ function ArchiveWorkspace({
   error: string | null;
   folders: FolderType[];
   loading: boolean;
+  keywordSearchFilters: KeywordSearchFilterState;
   searchDocuments: ArchiveDocument[];
   searchMode: SearchMode | null;
   searchQuery: string;
@@ -702,6 +757,7 @@ function ArchiveWorkspace({
   onRunSearch: (mode: SearchMode) => void;
   onSearchQueryChange: (query: string) => void;
   onGoToDocumentFolder: (document: ArchiveDocument) => void;
+  onApplyKeywordSearchFilters: (filters: KeywordSearchFilterState) => void;
   onSelectDocument: (documentId: string) => void;
   onSelectFolder: (folderId: string | null) => void;
   onShowDocumentContextMenu: (document: ArchiveDocument, x: number, y: number) => void;
@@ -780,6 +836,11 @@ function ArchiveWorkspace({
                     className="h-10 bg-muted/40 pl-9 shadow-none"
                   />
                 </div>
+                <KeywordSearchFilterMenu
+                  busy={busy}
+                  filters={keywordSearchFilters}
+                  onApply={onApplyKeywordSearchFilters}
+                />
                 <DropdownMenu open={searchMenuOpen} onOpenChange={setSearchMenuOpen}>
                   <DropdownMenuTrigger asChild>
                     <Button type="button" variant="outline" size="sm" className="shrink-0 px-2 md:px-3" aria-label="검색 방식 선택">
@@ -849,7 +910,7 @@ function ArchiveWorkspace({
                     </div>
                     {searchResults && (
                       <button className="mt-1 text-xs text-primary underline-offset-4 hover:underline" onClick={onClearSearch}>
-                        {formatSearchMode(searchMode)} 결과 {searchResults.length}개 표시 중. 검색 지우기
+                        {formatSearchMode(searchMode)} 결과 문서 {uniqueRows.length}개 표시 중. 검색 지우기
                       </button>
                     )}
                   </div>
@@ -881,11 +942,19 @@ function ArchiveWorkspace({
                 )}
 
                 <div className="overflow-hidden rounded-md border bg-card">
-                  <div className="grid grid-cols-[minmax(0,1fr)_96px_36px] gap-3 border-b px-3 py-2 text-xs font-medium uppercase text-muted-foreground md:grid-cols-[minmax(0,1.6fr)_120px_110px_112px_36px]">
+                  <div
+                    className={cn(
+                      "grid grid-cols-[minmax(0,1fr)_96px_36px] gap-3 border-b px-3 py-2 text-xs font-medium uppercase text-muted-foreground",
+                      searchResults
+                        ? "md:grid-cols-[minmax(0,1.6fr)_120px_110px_112px_120px_36px]"
+                        : "md:grid-cols-[minmax(0,1.6fr)_120px_110px_112px_36px]",
+                    )}
+                  >
                     <span>이름</span>
-                    <span className="hidden md:block">수정일</span>
+                    <span className="hidden md:block">등록일</span>
                     <span className="hidden md:block">크기</span>
                     <span>상태</span>
+                    {searchResults && <span className="hidden md:block">폴더</span>}
                     <span className="sr-only">작업</span>
                   </div>
                   <div className="divide-y">
@@ -896,6 +965,7 @@ function ArchiveWorkspace({
                         <DocumentResultRow
                           key={document.id}
                           document={document}
+                          folderName={searchResults ? folderDisplayName(document, folders) : null}
                           result={searchResultsByDocumentId.get(document.id) ?? null}
                           searchMode={searchMode}
                           onDelete={() => onDeleteDocument(document)}
@@ -991,6 +1061,176 @@ function HeaderTooltip({
         {label}
       </TooltipContent>
     </Tooltip>
+  );
+}
+
+function KeywordSearchFilterMenu({
+  busy,
+  filters,
+  onApply,
+}: {
+  busy: boolean;
+  filters: KeywordSearchFilterState;
+  onApply: (filters: KeywordSearchFilterState) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(filters);
+  const activeCount = countActiveKeywordSearchFilters(filters);
+
+  function updateDraft(updater: (current: KeywordSearchFilterState) => KeywordSearchFilterState) {
+    setDraft((current) => updater(current));
+  }
+
+  function applyFilters(nextFilters: KeywordSearchFilterState) {
+    onApply(nextFilters);
+    setOpen(false);
+  }
+
+  return (
+    <DropdownMenu
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (nextOpen) setDraft(filters);
+        setOpen(nextOpen);
+      }}
+    >
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-sm"
+          className="relative shrink-0"
+          aria-label="키워드 필터"
+          disabled={busy}
+        >
+          <Filter className="size-4" />
+          {activeCount > 0 && (
+            <span className="absolute -right-1 -top-1 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium leading-4 text-primary-foreground">
+              {activeCount}
+            </span>
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-[min(22rem,calc(100vw-2rem))] p-3">
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <div className="text-sm font-medium">키워드 필터</div>
+            <p className="text-xs text-muted-foreground">키워드 검색에만 적용됩니다.</p>
+          </div>
+          <KeywordFilterSection title="유형">
+            <KeywordFilterCheckbox
+              checked={draft.fileTypes.length === 0}
+              label="전체"
+              onCheckedChange={(checked) => {
+                if (checked) updateDraft((current) => ({ ...current, fileTypes: [] }));
+              }}
+            />
+            {fileTypeFilterOptions.map((option) => (
+              <KeywordFilterCheckbox
+                key={option.value}
+                checked={draft.fileTypes.includes(option.value)}
+                label={option.label}
+                onCheckedChange={(checked) =>
+                  updateDraft((current) => ({
+                    ...current,
+                    fileTypes: toggleFileType(current.fileTypes, option.value, checked),
+                  }))
+                }
+              />
+            ))}
+          </KeywordFilterSection>
+          <KeywordFilterSection title="처리 상태">
+            <KeywordFilterCheckbox
+              checked={draft.processingStatuses.length === 0}
+              label="전체"
+              onCheckedChange={(checked) => {
+                updateDraft((current) => ({
+                  ...current,
+                  processingStatuses: checked ? [] : defaultKeywordSearchFilters.processingStatuses,
+                }));
+              }}
+            />
+            {processingStatusFilterOptions.map((option) => (
+              <KeywordFilterCheckbox
+                key={option.value}
+                checked={draft.processingStatuses.includes(option.value)}
+                label={option.label}
+                onCheckedChange={(checked) =>
+                  updateDraft((current) => ({
+                    ...current,
+                    processingStatuses: toggleProcessingStatus(current.processingStatuses, option.value, checked),
+                  }))
+                }
+              />
+            ))}
+          </KeywordFilterSection>
+          <KeywordFilterSection title="생성일">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label htmlFor="keyword-created-from" className="text-xs text-muted-foreground">
+                  시작
+                </Label>
+                <Input
+                  id="keyword-created-from"
+                  type="date"
+                  value={draft.createdFrom}
+                  onChange={(event) => updateDraft((current) => ({ ...current, createdFrom: event.target.value }))}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="keyword-created-to" className="text-xs text-muted-foreground">
+                  종료
+                </Label>
+                <Input
+                  id="keyword-created-to"
+                  type="date"
+                  value={draft.createdTo}
+                  onChange={(event) => updateDraft((current) => ({ ...current, createdTo: event.target.value }))}
+                />
+              </div>
+            </div>
+          </KeywordFilterSection>
+          <div className="flex items-center justify-end gap-2 border-t pt-3">
+            <Button type="button" variant="outline" size="sm" onClick={() => applyFilters(defaultKeywordSearchFilters)} disabled={busy}>
+              초기화
+            </Button>
+            <Button type="button" size="sm" onClick={() => applyFilters(draft)} disabled={busy}>
+              적용
+            </Button>
+          </div>
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function KeywordFilterSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="space-y-2">
+      <div className="text-xs font-medium text-muted-foreground">{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function KeywordFilterCheckbox({
+  checked,
+  label,
+  onCheckedChange,
+}: {
+  checked: boolean;
+  label: string;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  const id = useId();
+
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <Checkbox id={id} checked={checked} onCheckedChange={(nextChecked) => onCheckedChange(nextChecked === true)} />
+      <Label htmlFor={id} className="min-w-0 flex-1 truncate text-sm font-normal">
+        {label}
+      </Label>
+    </div>
   );
 }
 
@@ -1652,6 +1892,7 @@ function ContextMenuButton({
 
 function DocumentResultRow({
   document,
+  folderName,
   result,
   searchMode,
   selected,
@@ -1663,6 +1904,7 @@ function DocumentResultRow({
   onShowContextMenu,
 }: {
   document: ArchiveDocument;
+  folderName: string | null;
   result: SearchResult | null;
   searchMode: SearchMode | null;
   selected: boolean;
@@ -1677,6 +1919,7 @@ function DocumentResultRow({
     return (
       <DocumentRow
         document={document}
+        folderName={folderName}
         selected={selected}
         onDelete={onDelete}
         onGoToFolder={onGoToFolder}
@@ -1693,7 +1936,12 @@ function DocumentResultRow({
       <div
         role="button"
         tabIndex={0}
-        className="grid grid-cols-[minmax(0,1fr)_96px_36px] items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/50 md:grid-cols-[minmax(0,1.6fr)_120px_110px_112px_36px]"
+        className={cn(
+          "grid grid-cols-[minmax(0,1fr)_96px_36px] items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/50",
+          folderName
+            ? "md:grid-cols-[minmax(0,1.6fr)_120px_110px_112px_120px_36px]"
+            : "md:grid-cols-[minmax(0,1.6fr)_120px_110px_112px_36px]",
+        )}
         onClick={onSelect}
         onContextMenu={(event) => {
           event.preventDefault();
@@ -1707,7 +1955,7 @@ function DocumentResultRow({
         }}
       >
         <DocumentRowContent document={document} />
-        <span className="hidden text-sm text-muted-foreground md:block">{formatDate(document.updated_at)}</span>
+        <span className="hidden text-sm text-muted-foreground md:block">{formatDate(document.created_at)}</span>
         <span className="hidden text-sm text-muted-foreground md:block">{formatSize(document.file_size)}</span>
         <span className="flex items-center gap-2">
           <Badge variant={document.processing_status === "failed" ? "destructive" : "outline"}>
@@ -1725,6 +1973,7 @@ function DocumentResultRow({
             </Button>
           </CollapsibleTrigger>
         </span>
+        {folderName && <span className="hidden truncate text-sm text-muted-foreground md:block">{folderName}</span>}
         <div className="flex items-center justify-end">
           <DocumentRowMenu
             document={document}
@@ -1765,6 +2014,7 @@ function DocumentResultRow({
 
 function DocumentRow({
   document,
+  folderName,
   selected,
   onDelete,
   onGoToFolder,
@@ -1774,6 +2024,7 @@ function DocumentRow({
   onShowContextMenu,
 }: {
   document: ArchiveDocument;
+  folderName: string | null;
   selected: boolean;
   onDelete: () => void;
   onGoToFolder: () => void;
@@ -1788,6 +2039,7 @@ function DocumentRow({
       tabIndex={0}
       className={cn(
         "grid w-full grid-cols-[minmax(0,1fr)_96px_36px] items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/50 md:grid-cols-[minmax(0,1.6fr)_120px_110px_112px_36px]",
+        folderName && "md:grid-cols-[minmax(0,1.6fr)_120px_110px_112px_120px_36px]",
         selected && "bg-primary/10",
       )}
       onClick={onSelect}
@@ -1803,13 +2055,14 @@ function DocumentRow({
       }}
     >
       <DocumentRowContent document={document} />
-      <span className="hidden text-sm text-muted-foreground md:block">{formatDate(document.updated_at)}</span>
+      <span className="hidden text-sm text-muted-foreground md:block">{formatDate(document.created_at)}</span>
       <span className="hidden text-sm text-muted-foreground md:block">{formatSize(document.file_size)}</span>
       <span>
         <Badge variant={document.processing_status === "failed" ? "destructive" : "outline"}>
           {formatProcessingStatus(document.processing_status)}
         </Badge>
       </span>
+      {folderName && <span className="hidden truncate text-sm text-muted-foreground md:block">{folderName}</span>}
       <DocumentRowMenu
         document={document}
         onDelete={onDelete}
@@ -2019,8 +2272,7 @@ function MetadataSidebar({
                       label={selected.is_generated ? "작업 소요" : "업로드 소요"}
                       value={elapsedSeconds === null ? "없음" : `${formatElapsedSeconds(elapsedSeconds)}초`}
                     />
-                    <MetaRow icon={CalendarDays} label="생성일" value={formatDate(selected.created_at)} />
-                    <MetaRow icon={Clock3} label="수정일" value={formatDate(selected.updated_at)} />
+                    <MetaRow icon={CalendarDays} label="등록일" value={formatDate(selected.created_at)} />
                   </dl>
                   {selected.processing_error && (
                     <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive break-words [overflow-wrap:anywhere]">
@@ -2512,6 +2764,11 @@ function documentDisplayName(document: ArchiveDocument) {
   return document.corrected_filename || document.title || document.original_filename;
 }
 
+function folderDisplayName(document: ArchiveDocument, folders: FolderType[]) {
+  if (!document.folder_id) return "내 드라이브";
+  return folders.find((folder) => folder.id === document.folder_id)?.name ?? "알 수 없음";
+}
+
 function isProcessingDocument(document: ArchiveDocument) {
   return document.processing_status === "pending" || document.processing_status === "processing";
 }
@@ -2556,6 +2813,52 @@ function formatProcessingStatus(status: string) {
   };
 
   return labels[status] ?? status;
+}
+
+function toKeywordSearchFiltersPayload(filters: KeywordSearchFilterState): KeywordSearchFilters {
+  return {
+    file_types: filters.fileTypes,
+    created_from: filters.createdFrom ? dateInputToIso(filters.createdFrom, "start") : null,
+    created_to: filters.createdTo ? dateInputToIso(filters.createdTo, "end") : null,
+    processing_statuses: filters.processingStatuses,
+  };
+}
+
+function dateInputToIso(value: string, boundary: "start" | "end") {
+  const [year, month, day] = value.split("-").map(Number);
+  const date =
+    boundary === "start"
+      ? new Date(year, month - 1, day, 0, 0, 0, 0)
+      : new Date(year, month - 1, day, 23, 59, 59, 999);
+  return date.toISOString();
+}
+
+function countActiveKeywordSearchFilters(filters: KeywordSearchFilterState) {
+  let count = 0;
+  if (filters.fileTypes.length) count += 1;
+  if (filters.createdFrom) count += 1;
+  if (filters.createdTo) count += 1;
+  if (!sameStringSet(filters.processingStatuses, defaultKeywordSearchFilters.processingStatuses)) count += 1;
+  return count;
+}
+
+function toggleFileType(values: Array<"pdf" | "image" | "text">, value: "pdf" | "image" | "text", checked: boolean) {
+  if (checked) return values.includes(value) ? values : [...values, value];
+  return values.filter((item) => item !== value);
+}
+
+function toggleProcessingStatus(values: string[], value: string, checked: boolean) {
+  if (checked) return addUnique(values, value);
+  return values.filter((item) => item !== value);
+}
+
+function addUnique(values: string[], value: string) {
+  return values.includes(value) ? values : [...values, value];
+}
+
+function sameStringSet(left: string[], right: string[]) {
+  if (left.length !== right.length) return false;
+  return left.every((value) => right.includes(value));
 }
 
 function searchResultsByDocument(results: SearchResult[] | null) {

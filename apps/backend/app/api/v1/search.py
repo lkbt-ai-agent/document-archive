@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import Select
 
 from app.ai.llama_cpp_provider import get_embedding_provider, get_text_generation_provider
 from app.ai.providers import AIProviderRuntimeError
@@ -12,6 +13,40 @@ from app.db.models import Document, DocumentChunk, ProcessingStatus
 
 
 router = APIRouter(prefix="/search", tags=["search"])
+
+
+def _apply_keyword_filters(stmt: Select, payload: KeywordSearchRequest) -> Select:
+    if payload.file_types:
+        file_type_conditions = []
+        if "pdf" in payload.file_types:
+            file_type_conditions.append(Document.mime_type == "application/pdf")
+        if "image" in payload.file_types:
+            file_type_conditions.append(Document.mime_type.like("image/%"))
+        if "text" in payload.file_types:
+            file_type_conditions.append(
+                or_(
+                    Document.mime_type.like("text/%"),
+                    Document.mime_type.in_(
+                        [
+                            "application/markdown",
+                            "application/x-markdown",
+                        ]
+                    ),
+                )
+            )
+        if file_type_conditions:
+            stmt = stmt.where(or_(*file_type_conditions))
+
+    if payload.processing_statuses is None:
+        stmt = stmt.where(Document.processing_status == ProcessingStatus.ready)
+    elif payload.processing_statuses:
+        stmt = stmt.where(Document.processing_status.in_(payload.processing_statuses))
+
+    if payload.created_from:
+        stmt = stmt.where(Document.created_at >= payload.created_from)
+    if payload.created_to:
+        stmt = stmt.where(Document.created_at <= payload.created_to)
+    return stmt
 
 
 def _semantic_search_results(payload: SemanticSearchRequest, db: Session) -> list[SearchResult]:
@@ -49,14 +84,10 @@ def keyword_search(payload: KeywordSearchRequest, db: Session = Depends(get_db))
     stmt = (
         select(DocumentChunk, Document)
         .join(Document, Document.id == DocumentChunk.document_id)
-        .where(Document.processing_status == ProcessingStatus.ready)
         .where(DocumentChunk.content.ilike(f"%{payload.query}%"))
         .limit(payload.limit)
     )
-    if payload.root_only:
-        stmt = stmt.where(Document.folder_id.is_(None))
-    elif payload.folder_id:
-        stmt = stmt.where(Document.folder_id == payload.folder_id)
+    stmt = _apply_keyword_filters(stmt, payload)
     return [
         SearchResult(
             chunk_id=chunk.id,

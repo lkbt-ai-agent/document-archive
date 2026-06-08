@@ -65,6 +65,13 @@ export type SearchResult = {
   score: number | null;
 };
 
+export type KeywordSearchFilters = {
+  file_types?: Array<"pdf" | "image" | "text">;
+  created_from?: string | null;
+  created_to?: string | null;
+  processing_statuses?: string[] | null;
+};
+
 export type RagSearchResponse = {
   answer: string;
   citations: SearchResult[];
@@ -153,10 +160,10 @@ export const api = {
       body: form,
     });
   },
-  keywordSearch: (query: string, folderId?: string | null) =>
+  keywordSearch: (query: string, filters?: KeywordSearchFilters) =>
     request<SearchResult[]>("/search/keyword", {
       method: "POST",
-      body: JSON.stringify({ query, folder_id: folderId, root_only: false, limit: 25 }),
+      body: JSON.stringify({ query, limit: 25, ...filters }),
     }),
   semanticSearch: (query: string, folderId?: string | null) =>
     request<SearchResult[]>("/search/semantic", {

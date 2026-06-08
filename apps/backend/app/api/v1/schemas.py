@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from app.db.models import ProcessingStatus
 
 
 class FolderCreate(BaseModel):
@@ -81,9 +84,11 @@ class DocumentChunkRead(BaseModel):
 
 class KeywordSearchRequest(BaseModel):
     query: str = Field(min_length=1)
-    folder_id: uuid.UUID | None = None
-    root_only: bool = False
     limit: int = Field(default=20, ge=1, le=100)
+    file_types: list[Literal["pdf", "image", "text"]] = Field(default_factory=list)
+    created_from: datetime | None = None
+    created_to: datetime | None = None
+    processing_statuses: list[ProcessingStatus] | None = None
 
 
 class SemanticSearchRequest(BaseModel):

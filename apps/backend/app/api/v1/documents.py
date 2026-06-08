@@ -6,7 +6,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import FileResponse, RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.ai.providers import AIProviderRuntimeError
@@ -111,7 +111,13 @@ def update_document(document_id: uuid.UUID, payload: DocumentUpdate, db: Session
     if "folder_id" in payload.model_fields_set and payload.folder_id is not None and not db.get(Folder, payload.folder_id):
         raise HTTPException(status_code=404, detail="Target folder not found.")
     if "folder_id" in payload.model_fields_set:
-        document.folder_id = payload.folder_id
+        preserved_updated_at = document.updated_at
+        db.execute(
+            update(Document)
+            .where(Document.id == document.id)
+            .values(folder_id=payload.folder_id, updated_at=preserved_updated_at)
+        )
+        db.refresh(document)
     return document
 
 
